@@ -12,3 +12,43 @@ body,
 body {
     margin: 0;
 }
+
+.topas-preview {
+    --topas-comment: #52635a;
+    --topas-type: #6b21a8;
+    --topas-path: #075985;
+    --topas-string: #166534;
+    --topas-number: #9a3412;
+    --topas-unit: #0e6461;
+    --topas-placeholder: #991b1b;
+    --topas-placeholder-bg: #fee2e2;
+    tab-size: 4;
+    line-height: 1.65;
+}
+
+[data-theme="dark"] .topas-preview,
+[data-theme="night"] .topas-preview {
+    --topas-comment: #a1b4a5;
+    --topas-type: #d8b4fe;
+    --topas-path: #7dd3fc;
+    --topas-string: #86efac;
+    --topas-number: #fdba74;
+    --topas-unit: #5eead4;
+    --topas-placeholder: #fecaca;
+    --topas-placeholder-bg: #7f1d1d;
+}
+
+.topas-comment { color: var(--topas-comment); }
+.topas-type { color: var(--topas-type); font-weight: 600; }
+.topas-path { color: var(--topas-path); }
+.topas-string { color: var(--topas-string); }
+.topas-number { color: var(--topas-number); }
+.topas-unit { color: var(--topas-unit); }
+.topas-operator { opacity: 0.8; }
+.topas-keyword { color: var(--topas-type); font-weight: 600; }
+.topas-placeholder {
+    color: var(--topas-placeholder);
+    background: var(--topas-placeholder-bg);
+    text-decoration: underline wavy;
+    text-underline-offset: 3px;
+}

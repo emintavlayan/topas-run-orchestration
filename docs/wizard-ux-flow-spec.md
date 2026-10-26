@@ -65,6 +65,7 @@ Behavior:
 - Component step requires at least one selected component.
 - Node and phase-space steps support `Select all`/`Select none`.
 - Review requests preview before final execution.
+- The stitched TOPAS preview uses theme-aware syntax highlighting and visually flags unresolved placeholders. This is a review aid, not TOPAS semantic or physics validation.
 - Result shows generated run summary.
 - Cancel resets Generate wizard state.
 

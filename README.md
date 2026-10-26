@@ -28,6 +28,7 @@ The app runs as a server with browser-based UI clients.
 
 - Client UI is styled with Tailwind CSS + daisyUI.
 - Generate, Run, and Collect use a shared vertical wizard shell in `src/Client/WizardShell.fs`.
+- Generate Review syntax-highlights TOPAS comments, parameter types and paths, values, units, and unresolved placeholders without changing the stitched input text.
 - The UI uses CSS-only components (no JavaScript UI library wrappers).
 
 ## AppRoot folder structure

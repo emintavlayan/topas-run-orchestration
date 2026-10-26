@@ -20,6 +20,7 @@ let all =
         Shared.Tests.shared
 #endif
         client
+        TopasSyntax.Tests.syntax
     ]
 
 [<EntryPoint>]

@@ -14,6 +14,8 @@
         <Compile Include="RunLogic.fs" />
         <Compile Include="CollectLogic.fs" />
         <Compile Include="WizardShell.fs" />
+        <Compile Include="TopasSyntax.fs" />
+        <Compile Include="TopasPreview.fs" />
         <Compile Include="GenerateViews.fs" />
         <Compile Include="RunViews.fs" />
         <Compile Include="CollectViews.fs" />

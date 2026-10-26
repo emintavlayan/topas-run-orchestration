@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
+    <Compile Include="TopasSyntax.Tests.fs" />
     <Compile Include="Client.Tests.fs" />
   </ItemGroup>
   <ItemGroup>

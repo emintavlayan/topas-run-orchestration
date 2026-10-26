@@ -237,7 +237,7 @@ let viewReview (generate: GenerateModel) =
         | Loading(Some preview) ->
             Html.div [
                 prop.className "mt-2"
-                prop.children [ viewCodeScroll preview.StitchedPreviewText ]
+                prop.children [ TopasPreview.view preview.StitchedPreviewText ]
             ]
         | Loading _ -> Html.p "Loading preview..."
         | Loaded preview ->
@@ -249,7 +249,7 @@ let viewReview (generate: GenerateModel) =
                     ]
                     Html.div [
                         prop.className "mt-2"
-                        prop.children [ viewCodeScroll preview.StitchedPreviewText ]
+                        prop.children [ TopasPreview.view preview.StitchedPreviewText ]
                     ]
                 ]
             ]
