@@ -928,7 +928,6 @@ let ``Scorer discovery assigns overlapping run stems to their longest owner`` ()
 [<InlineData("_", "_x")>]
 [<InlineData("", "_default")>]
 [<InlineData("_x", "x")>]
-[<InlineData("_X", "_x")>]
 let ``Scorer discovery blocks folder traversal and naming collisions`` (first: string) (second: string) =
     withScorerBatch [ first; second ] (fun settings _ _ ->
         let preview = assertOk (previewCollect settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] })
@@ -936,6 +935,18 @@ let ``Scorer discovery blocks folder traversal and naming collisions`` (first: s
         Assert.Contains(preview.Preflight.Checks, fun check -> check.Name = "Scorer CSV families discovered" && not check.Ok)
         assertError (collectBatch settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] }) |> ignore
         Assert.False(Directory.Exists(CollectPlanning.outputFolderPath settings "1001")))
+
+/// Checks case-only collisions independently of whether the filesystem can store both filenames.
+[<Fact>]
+let ``Scorer planning rejects case-only folder collisions on every platform`` () =
+    let message = assertError (collectScorersFromSuffixes [ "_X"; "_x" ])
+    Assert.Contains("same output folder", message)
+
+/// Checks that the same suffix discovered in multiple runs remains one scorer family.
+[<Fact>]
+let ``Scorer planning deduplicates repeated suffixes across runs`` () =
+    let scorers = assertOk (collectScorersFromSuffixes [ "_x"; "_pdd"; "_x" ])
+    Assert.Equal<string list>([ "pdd"; "x" ], scorers |> List.map _.Name)
 
 /// Checks the current production CSV names without requiring any predefined scorer list.
 [<Fact>]

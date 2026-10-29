@@ -59,6 +59,18 @@ let private scorerFromSuffix (suffix: string) : Result<CollectScorer, string> =
     else
         Ok { Suffix = suffix; Name = name }
 
+/// Builds scorer families and rejects conflicting output folder names without accessing the filesystem.
+let collectScorersFromSuffixes (suffixes: string list) : Result<CollectScorer list, string> =
+    let distinctSuffixes = suffixes |> List.distinct |> List.sort
+    result {
+        // Retain missing-file diagnostics when no CSV has been produced yet.
+        let! scorers = (if distinctSuffixes.IsEmpty then [ "" ] else distinctSuffixes) |> List.traverseResultM scorerFromSuffix
+        let collisions = scorers |> List.groupBy (fun scorer -> scorer.Name.ToUpperInvariant()) |> List.filter (fun (_, items) -> items.Length > 1)
+        if not collisions.IsEmpty then
+            return! Error "Different scorer suffixes resolve to the same output folder. Rename the conflicting suffixes before collection."
+        return scorers
+    }
+
 /// Discovers scorer families using the longest matching generated stem to avoid neighbouring run IDs.
 let discoverCollectScorers (allRows: CollectRunRow list) (effectiveRows: CollectRunRow list) : Result<CollectScorer list, string> =
     try
@@ -79,17 +91,8 @@ let discoverCollectScorers (allRows: CollectRunRow list) (effectiveRows: Collect
                         |> Option.filter (fun row -> effectivePaths.Contains row.OutputFilePath)
                         |> Option.map (fun row -> stem.Substring(Path.GetFileName(row.OutputFilePath).Length)))
                     |> Seq.toList)
-            |> List.distinct
-            |> List.sort
 
-        result {
-            // Retain missing-file diagnostics when no CSV has been produced yet.
-            let! scorers = (if suffixes.IsEmpty then [ "" ] else suffixes) |> List.traverseResultM scorerFromSuffix
-            let collisions = scorers |> List.groupBy (fun scorer -> scorer.Name.ToUpperInvariant()) |> List.filter (fun (_, items) -> items.Length > 1)
-            if not collisions.IsEmpty then
-                return! Error "Different scorer suffixes resolve to the same output folder. Rename the conflicting suffixes before collection."
-            return scorers
-        }
+        collectScorersFromSuffixes suffixes
     with ex ->
         Error $"Failed discovering scorer CSV files: {ex.Message}"
 
