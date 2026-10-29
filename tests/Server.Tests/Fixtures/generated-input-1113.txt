@@ -1,0 +1,130 @@
+################################################################################
+# PDD SCORER — PTW Roos 34001 geometry, 2 mm depth bins
+#
+# Scores the central-axis PDD over the first 5 cm of the cylindrical water tank.
+#
+# RoosPDD:
+#   - radius = 0.78 cm
+#   - length = 5.0 cm
+#   - ZBins = 25
+#   - depth-bin thickness = 5.0/25 = 0.2 cm = 2 mm
+#
+# Each scoring bin therefore represents a cylindrical sensitive volume with
+# the 7.8 mm Roos chamber radius and 2 mm thickness.
+#
+# WaterTank:
+#   - centre at world z = +15.0 cm
+#   - front surface at world z = 0.0 cm
+#
+# RoosPDD:
+#   - local TransZ = -12.5 cm
+#   - world centre = +2.5 cm
+#   - scoring range = 0 to 5 cm depth
+################################################################################
+
+s:Ge/RoosPDD/Type         = "TsCylinder"
+s:Ge/RoosPDD/Parent       = "WaterTank"
+b:Ge/RoosPDD/IsParallel   = "True"
+
+s:Ge/RoosPDD/Color        = "red"
+s:Ge/RoosPDD/DrawingStyle = "Wireframe"
+
+d:Ge/RoosPDD/RMin         = 0.0 cm
+d:Ge/RoosPDD/RMax         = 0.78 cm
+d:Ge/RoosPDD/HL           = 2.5 cm
+
+d:Ge/RoosPDD/SPhi         = 0.0 deg
+d:Ge/RoosPDD/DPhi         = 360.0 deg
+
+d:Ge/RoosPDD/TransX       = 0.0 cm
+d:Ge/RoosPDD/TransY       = 0.0 cm
+d:Ge/RoosPDD/TransZ       = -12.5 cm
+
+s:Sc/PDD/Quantity                  = "DoseToMedium"
+s:Sc/PDD/Component                 = "RoosPDD"
+
+i:Sc/PDD/RBins                     = 1
+i:Sc/PDD/PhiBins                   = 1
+i:Sc/PDD/ZBins                     = 25
+
+sv:Sc/PDD/Report                   = 1 "Sum"
+s:Sc/PDD/OutputType                = "CSV"
+s:Sc/PDD/OutputFile                = "/srv/cluster/tsebt/runs/1113/seed11137_phsp21_pdd"
+s:Sc/PDD/IfOutputFileAlreadyExists = "Overwrite"
+
+################################################################################
+# FULL X PROFILE SCORER — 2 x 2 x 2 mm3 voxels
+#
+# Scores the full lateral X profile at 1.3 cm depth in the cylindrical
+# water tank.
+#
+# WaterTank:
+#   - centre at world z = +15.0 cm
+#   - front surface at world z = 0.0 cm
+#
+# XProfileFull:
+#   - local TransZ = -13.7 cm
+#   - world z = +1.3 cm
+#   - profile length = 60 cm
+#   - voxel size = 2 x 2 x 2 mm3
+################################################################################
+
+s:Ge/XProfileFull/Parent       = "WaterTank"
+s:Ge/XProfileFull/Type         = "TsBox"
+b:Ge/XProfileFull/IsParallel   = "True"
+
+s:Ge/XProfileFull/Color        = "red"
+s:Ge/XProfileFull/DrawingStyle = "Wireframe"
+b:Ge/XProfileFull/Invisible    = "True"
+
+d:Ge/XProfileFull/HLX          = 30.0 cm
+d:Ge/XProfileFull/HLY          = 0.1 cm
+d:Ge/XProfileFull/HLZ          = 0.1 cm
+
+d:Ge/XProfileFull/TransX       = 0.0 cm
+d:Ge/XProfileFull/TransY       = 0.0 cm
+d:Ge/XProfileFull/TransZ       = -13.7 cm
+
+s:Sc/XProfileFull/Quantity                  = "DoseToMedium"
+s:Sc/XProfileFull/Component                 = "XProfileFull"
+
+i:Sc/XProfileFull/XBins                     = 300
+i:Sc/XProfileFull/YBins                     = 1
+i:Sc/XProfileFull/ZBins                     = 1
+
+sv:Sc/XProfileFull/Report                   = 1 "Sum"
+s:Sc/XProfileFull/OutputType                = "CSV"
+s:Sc/XProfileFull/OutputFile                = "/srv/cluster/tsebt/runs/1113/seed11137_phsp21_xprofile"
+s:Sc/XProfileFull/IfOutputFileAlreadyExists = "Overwrite"
+
+################################################################################
+# CYLINDRICAL WATER TANK
+#
+# Geometry:
+#   radius = 31 cm
+#   length = 30 cm along z
+#   front surface at world z = 0 cm
+#   centre at world z = 15 cm
+#
+# Component used by scorers:
+#   WaterTank
+################################################################################
+
+s:Ge/WaterTank/Parent       = "World"
+s:Ge/WaterTank/Type         = "TsCylinder"
+s:Ge/WaterTank/Material     = "G4_WATER"
+
+s:Ge/WaterTank/Color        = "blue"
+s:Ge/WaterTank/DrawingStyle = "Wireframe"
+
+d:Ge/WaterTank/RMin         = 0.0 cm
+d:Ge/WaterTank/RMax         = 31.0 cm
+
+d:Ge/WaterTank/HL           = 15.0 cm
+
+d:Ge/WaterTank/SPhi         = 0.0 deg
+d:Ge/WaterTank/DPhi         = 360.0 deg
+
+d:Ge/WaterTank/TransX       = 0.0 cm
+d:Ge/WaterTank/TransY       = 0.0 cm
+d:Ge/WaterTank/TransZ       = 15.0 cm

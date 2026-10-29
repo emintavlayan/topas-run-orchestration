@@ -36,7 +36,7 @@ let buildSettings (appRoot: string) : TsebtSettings =
             Inputs = "inputs"
             Runs = "runs"
             Outputs = "outputs"
-            Database = "database\\app.db"
+            Database = Path.Combine("database", "app.db")
             Logs = "logs"
         }
         Placeholders = {
@@ -113,3 +113,4 @@ let seedGeneratedBatch
         runInsert.Parameters.AddWithValue("$outputBase", outputBase) |> ignore
         runInsert.Parameters.AddWithValue("$runFolder", Path.GetDirectoryName(outputBase)) |> ignore
         runInsert.ExecuteNonQuery() |> ignore)
+

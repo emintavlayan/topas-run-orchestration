@@ -20,6 +20,8 @@
     <Compile Include="CollectCsvMerge.fs" />
     <Compile Include="CollectStatistics.fs" />
     <Compile Include="CollectOperation.fs" />
+    <Compile Include="AnalysisInput.fs" />
+    <Compile Include="AnalysisOperation.fs" />
     <Compile Include="SqliteInit.fs" />
     <Compile Include="Server.fs" />
     <Content Update="appsettings.json">
@@ -31,3 +33,4 @@
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
+

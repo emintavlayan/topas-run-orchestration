@@ -1,117 +1,105 @@
-# Systemd Deployment
+# Initial systemd installation
 
-## Purpose
+[README](../README.md) · [All documentation](index.md)
 
-TopasRunOrchestration should run as a long-lived server process managed by `systemd`, not from an interactive terminal session.
+For ordinary updates to the existing server, use [deployment](how-to-deploy.md). This guide is for creating the service the first time.
 
-Why this is the preferred production model:
+## Check the target
 
-- automatic startup after reboot
-- consistent working directory and startup environment
-- restart policy for transient failures
-- centralized logs through `journalctl`
-- explicit operational control with `systemctl`
-- reproducible and auditable behavior that does not depend on an SSH session staying open
+The current installation uses user/group `fysiker`, application directory `/home/fysiker/WebApps/TopasRunOrchestration`, AppRoot `/srv/cluster/tsebt`, and port 5000. Change these consistently for another installation.
 
-For hospital or cluster deployment, this is the preferred operating model.
+The host needs the .NET 8 ASP.NET Core runtime, the service account, writable AppRoot, and cluster tools for actual Run execution. Inspect installed runtimes:
 
-## Deployment model
-
-- Build or publish the app first.
-- Copy the deployable output to one stable deploy folder.
-- Run the published server from that stable folder with `systemd`.
-- Keep `appsettings.json` and related config files in the deploy folder or another documented stable path.
-- If config changes, restart the service unless the app explicitly supports hot reload.
-- If the service unit changes, run `sudo systemctl daemon-reload` before restarting.
-
-Example stable deploy folder:
-
-```text
-/srv/cluster/tsebt/TopasRunOrchestration/deploy
+```fish
+dotnet --list-runtimes
 ```
 
-## Installation flow
+## 1. Prepare a Linux package on Windows
 
-1. Publish or build the app.
-2. Copy deploy files to the stable deploy folder.
-3. Create `/etc/systemd/system/topas-run-orchestration.service`.
-4. Run `sudo systemctl daemon-reload`.
-5. Run `sudo systemctl enable topas-run-orchestration.service`.
-6. Run `sudo systemctl start topas-run-orchestration.service`.
-7. Verify status and logs.
+From the repository root in PowerShell, after configuring the intended branch:
 
-## Example service unit
+```powershell
+dotnet run --project .\\Build.fsproj -- Bundle
+dotnet publish .\\src\\Server\\Server.fsproj -c Release -r linux-x64 --self-contained false -p:UseAppHost=false -o .\\deploy-linux
+Copy-Item .\\deploy\\public .\\deploy-linux\\public -Recurse -Force
+tar -czf topas-initial.tar.gz -C .\\deploy-linux .
+scp .\\topas-initial.tar.gz fysiker@172.31.245.206:/home/fysiker/
+```
+
+Use a fresh `deploy-linux` output folder for this initial package. These are generated artifacts, not source files to commit. Stop if a build or transfer command fails. Unlike update packaging, this first package includes a base `appsettings.json`; inspect it before startup.
+
+## 2. Install the application files
+
+Connect from PowerShell:
+
+```powershell
+ssh fysiker@172.31.245.206
+```
+
+On the server, in Fish or Bash:
+
+```fish
+mkdir -p /home/fysiker/WebApps/TopasRunOrchestration
+tar -xzf /home/fysiker/topas-initial.tar.gz -C /home/fysiker/WebApps/TopasRunOrchestration
+nano /home/fysiker/WebApps/TopasRunOrchestration/appsettings.json
+```
+
+Verify node names, phase-space values, TOPAS executable and Slurm settings against this cluster. Set Linux-compatible relative paths. The example unit below supplies the AppRoot/database overrides explicitly. [All configuration fields](configuration.md)
+
+## 3. Create the unit
+
+```fish
+sudoedit /etc/systemd/system/topas-run-orchestration.service
+```
 
 ```ini
 [Unit]
-Description=Topas Run Orchestration
-After=network.target
+Description=TopasRunOrchestration SAFE web app
+After=network-online.target remote-fs.target slurmctld.service slurmd.service
+Wants=network-online.target
 
 [Service]
-WorkingDirectory=/srv/cluster/tsebt/TopasRunOrchestration/deploy
-ExecStart=/usr/bin/dotnet /srv/cluster/tsebt/TopasRunOrchestration/deploy/Server.dll
+Type=simple
+User=fysiker
+Group=fysiker
+WorkingDirectory=/home/fysiker/WebApps/TopasRunOrchestration
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Environment=Tsebt__AppRoot=/srv/cluster/tsebt
+Environment=Tsebt__Paths__Database=database/app.db
+ExecStart=/usr/bin/dotnet /home/fysiker/WebApps/TopasRunOrchestration/Server.dll
 Restart=on-failure
 RestartSec=5
-User=fysiker
-Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
-Environment=DOTNET_ENVIRONMENT=Production
+KillSignal=SIGINT
+TimeoutStopSec=30
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Create the unit file here:
+Check that `/usr/bin/dotnet` is the actual runtime location on your host. Ensure the service user has access to both directories and that required mounts are available. Do not run a second manual server on the same port.
 
-```bash
-/etc/systemd/system/topas-run-orchestration.service
-```
+## 4. Start and verify
 
-## Operational commands
-
-These commands are compatible with `bash` and `fish`:
-
-```bash
-sudo systemctl status topas-run-orchestration.service
-sudo systemctl stop topas-run-orchestration.service
-sudo systemctl start topas-run-orchestration.service
-sudo systemctl restart topas-run-orchestration.service
-journalctl -u topas-run-orchestration.service -f
+```fish
 sudo systemctl daemon-reload
+sudo systemctl enable --now topas-run-orchestration.service
+systemctl status topas-run-orchestration.service --no-pager
+curl -I http://127.0.0.1:5000/
+journalctl -u topas-run-orchestration.service -n 50 --no-pager
 ```
 
-## Example deployment sequence
+Open the server's address at port 5000 from a reachable browser. Check all four navigation tabs. Reachability also depends on local network/firewall policy; HTTP success on localhost alone does not establish remote access.
 
-```bash
-dotnet publish src/Server/Server.fsproj -c Release -o ./deploy
-sudo mkdir -p /srv/cluster/tsebt/TopasRunOrchestration/deploy
-sudo cp -r ./deploy/* /srv/cluster/tsebt/TopasRunOrchestration/deploy/
-sudoedit /etc/systemd/system/topas-run-orchestration.service
-sudo systemctl daemon-reload
-sudo systemctl enable topas-run-orchestration.service
-sudo systemctl start topas-run-orchestration.service
-sudo systemctl status topas-run-orchestration.service
-journalctl -u topas-run-orchestration.service -f
-```
+## Later operations
 
-## Operational notes
+| Action | Command on server |
+|---|---|
+| Stop | `sudo systemctl stop topas-run-orchestration.service` |
+| Start | `sudo systemctl start topas-run-orchestration.service` |
+| Restart after a configuration edit | `sudo systemctl restart topas-run-orchestration.service` |
+| Follow logs | `journalctl -u topas-run-orchestration.service -f` |
+| Reload a changed unit | `sudo systemctl daemon-reload` followed by restart |
 
-- `systemd` should run the published server executable or `dotnet` entrypoint from the stable deploy folder.
-- Do not rely on `dotnet run` in an SSH session for production uptime.
-- Use a documented deploy path so operations staff can audit what is running.
-- Restart after application updates, config changes, or environment changes.
-
-## Troubleshooting
-
-- Service fails immediately:
-  check `ExecStart`, `WorkingDirectory`, file permissions, and whether the service user can read the deploy folder.
-- Browser cannot reach the app:
-  check `ASPNETCORE_URLS`, firewall rules, reverse proxy configuration, and the client-facing port.
-- Config changed but behavior is unchanged:
-  restart the service.
-- Unit changed but behavior is unchanged:
-  run `sudo systemctl daemon-reload` and then restart the service.
-- Port `5000` is already in use:
-
-```bash
-sudo ss -ltnp | grep ':5000'
-```
+Use the [deployment script](how-to-deploy.md) for subsequent application updates. No unit reload is needed when only application files change.

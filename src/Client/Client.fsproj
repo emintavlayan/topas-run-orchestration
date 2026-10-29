@@ -19,6 +19,7 @@
         <Compile Include="GenerateViews.fs" />
         <Compile Include="RunViews.fs" />
         <Compile Include="CollectViews.fs" />
+        <Compile Include="AnalysisViews.fs" />
         <Compile Include="PageViews.fs" />
         <Compile Include="Index.fs" />
         <Compile Include="App.fs" />
@@ -29,3 +30,4 @@
     </ItemGroup>
     <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
+

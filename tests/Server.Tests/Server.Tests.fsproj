@@ -10,6 +10,7 @@
     <Compile Include="GenerateTests.fs" />
     <Compile Include="RunTests.fs" />
     <Compile Include="CollectTests.fs" />
+    <Compile Include="AnalysisTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
@@ -20,3 +21,4 @@
     <ProjectReference Include="..\..\src\Server\Server.fsproj" />
   </ItemGroup>
 </Project>
+

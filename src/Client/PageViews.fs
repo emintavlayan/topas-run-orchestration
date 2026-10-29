@@ -61,6 +61,7 @@ let viewWorkflowNavigation (model: Model) (dispatch: Msg -> unit) =
             topNavButton model.SelectedPage Generate dispatch
             topNavButton model.SelectedPage Run dispatch
             topNavButton model.SelectedPage Collect dispatch
+            topNavButton model.SelectedPage Analyse dispatch
         ]
     ]
 
@@ -131,6 +132,7 @@ let viewPageContent (model: Model) (dispatch: Msg -> unit) =
 
         viewRunPage appRoot model.Run dispatch
     | Collect -> viewCollectPage model.Collect dispatch
+    | Analyse -> AnalysisViews.view ()
 
 /// Renders the client landing page and selected content.
 let view (model: Model) (dispatch: Msg -> unit) =
@@ -150,3 +152,4 @@ let view (model: Model) (dispatch: Msg -> unit) =
             ]
         ]
     ]
+

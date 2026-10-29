@@ -1,5 +1,7 @@
 # Run Behaviour Specification
 
+[README](../README.md) · [All documentation](index.md)
+
 ## Purpose
 
 `Run` submits one generated batch (`seedBase`) to Slurm using metadata stored in SQLite.
@@ -90,8 +92,8 @@ Each node Slurm script:
 2. Block already-submitted batches (`Submitted/Running/Completed/Failed` with job id).
 3. Run preflight.
 4. Build per-node manifests and scripts.
-5. Write all manifest/script files.
-6. Execute `sbatch` once per node script.
+5. For each node in sequence, write its manifest/script.
+6. Immediately execute `sbatch` for that node before proceeding to the next.
 7. Parse each Slurm job id from output (`Submitted batch job 12345`).
 8. Update SQLite batch metadata (`run_status`, `slurm_job_id`, paths, timestamp), where `slurm_job_id` stores comma-separated ids.
 9. Update generated runs status to `Submitted`.
@@ -102,3 +104,16 @@ If any `sbatch` fails, files remain for debugging and batch status is not marked
 
 - Server stores full absolute paths.
 - Run wizard UI displays AppRoot-relative paths for readability where possible.
+
+
+## Implementation boundaries
+
+Source: [RunOperation.fs](../src/Server/RunOperation.fs).
+
+- Preflight also checks planned per-node manifest/script paths; existing files or directories block submission.
+- CSV collision checking specifically tests `{OutputFilePath}.csv`; it does not discover all suffixed scorer CSVs like Collect does. Do not interpret it as a general scorer-output overwrite detector.
+- There is no scheduler availability/executable/partition test in preflight. Process launch and `sbatch` report those errors at submission.
+- Per-node files are written and jobs submitted sequentially. A failure does not cancel earlier accepted jobs. An unparseable success response can also mean a job exists despite an application error.
+- Batch/run submission metadata is updated after all node submissions succeed. Stored primary paths identify the first node; the response also includes the returned job ID list.
+- This module records submission, not live scheduler progress; no automatic polling updates Running/Completed states.
+- Slurm stdout/stderr files use `slurm-{nodeName}-%A_%a.out` under the batch run folder. TOPAS stdout/stderr go to each run's `.log`.
