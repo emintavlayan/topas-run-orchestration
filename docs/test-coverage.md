@@ -29,3 +29,11 @@ Notes:
 - Tests use temporary folders and fake CSV/process output fixtures.
 - Real Slurm execution and real TOPAS execution remain manual smoke-test responsibilities.
 
+
+Deployment helper checks run independently on Linux:
+
+```bash
+bash tests/Deployment/deploy-app-tests.sh
+```
+
+These use temporary application folders and mock service commands to verify success, production-config preservation, startup-failure rollback, HTTP-failure rollback, and rejection of a corrupted archive before stopping the service. They do not deploy to a server.

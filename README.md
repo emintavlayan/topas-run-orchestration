@@ -136,6 +136,20 @@ Run tests:
 dotnet test Application.sln
 ```
 
+## Deploy from Windows
+
+```powershell
+.\scripts\deploy-app.ps1
+```
+
+After tests and Bundle have already passed for the current revision:
+
+```powershell
+.\scripts\deploy-app.ps1 -SkipBuild
+```
+
+Publishes for Linux, uploads, preserves server configuration, backs up the previous application, restarts systemd, and verifies HTTP health. Startup failure restores the previous application. See [deployment instructions](docs/how-to-deploy.md).
+
 ## Testing
 
 Server tests are xUnit-based and run via `dotnet test Application.sln`.
