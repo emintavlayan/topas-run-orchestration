@@ -136,6 +136,10 @@ Run tests:
 dotnet test Application.sln
 ```
 
+## Analyse
+
+The Analyse tab selects multiple collected scorer outputs, derives physical coordinates from their generated inputs, overlays normalized curves and uncertainty bands, and exports curve/metric tables. Flatness and symmetry default to ratio definitions (ideal 100%), with independent selectable difference definitions. PDD metrics include distal R50/R80/R90. See [analysis conventions](docs/analyse-behaviour-spec.md).
+
 ## Deploy from Windows
 
 ```powershell

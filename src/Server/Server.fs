@@ -148,6 +148,24 @@ let private collectBatchHandler (request: CollectRequest) : Async<Result<Collect
 
 /// Exposes the temporary TSEBT API skeleton.
 let topasApi (_: HttpContext) : ITopasApi = {
+    listAnalysisDatasets = fun () -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.listDatasets settings
+        }
+    }
+    loadAnalysisCurve = fun id -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.loadCurve settings id
+        }
+    }
+    saveAnalysisMapping = fun request -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.saveMapping settings request
+        }
+    }
     getAppConfig = getAppConfigHandler
     getTemplateFiles = getTemplateFilesHandler
     previewGenerate = previewGenerateHandler
@@ -194,3 +212,4 @@ let main _ =
     | Error errorMessage ->
         eprintfn "%s" errorMessage
         1
+

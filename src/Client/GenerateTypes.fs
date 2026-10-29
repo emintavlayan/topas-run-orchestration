@@ -8,6 +8,7 @@ type Page =
     | Generate
     | Run
     | Collect
+    | Analyse
 
 /// Represents the visual theme selected for the client shell.
 type ThemeName =
@@ -123,3 +124,4 @@ type Msg =
     | LoadCollectBatches of ApiCall<unit, Result<CollectBatchSummary list, string>>
     | LoadCollectPreview of ApiCall<CollectPreviewRequest, Result<CollectPreviewResult, string>>
     | RunCollectBatch of ApiCall<CollectRequest, Result<CollectResult, string>>
+

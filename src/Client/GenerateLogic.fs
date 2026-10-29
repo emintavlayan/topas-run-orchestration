@@ -196,6 +196,7 @@ let pageLabel (page: Page) : string =
     | Generate -> "Generate"
     | Run -> "Run"
     | Collect -> "Collect"
+    | Analyse -> "Analyse"
 
 /// Returns display text for a wizard step heading.
 let stepLabel (step: GenerateStep) : string =

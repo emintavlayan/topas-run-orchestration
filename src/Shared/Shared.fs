@@ -273,7 +273,21 @@ type AppConfigView = {
     Placeholders: string list
 }
 
+/// Represents one collected scorer available for analysis.
+type AnalysisDataset = { Id: string; Label: string }
+/// Represents an explicitly confirmed physical coordinate mapping.
+type AnalysisMapping = { Role: string; Axis: int; StepMm: float; OriginMm: float; CaxMm: float; Confirmed: bool }
+/// Represents a sampled dose and its absolute statistical uncertainty.
+type AnalysisPoint = { Position: float; Dose: float; Uncertainty: float }
+/// Represents a collected curve with its saved coordinate mapping.
+type AnalysisCurve = { Dataset: AnalysisDataset; Mapping: AnalysisMapping option; MappingSource: string; Points: AnalysisPoint list }
+/// Represents a request to save a physical mapping beside a collected curve.
+type SaveAnalysisMapping = { Id: string; Mapping: AnalysisMapping }
+
 type ITopasApi = {
+    listAnalysisDatasets: unit -> Async<Result<AnalysisDataset list, string>>
+    loadAnalysisCurve: string -> Async<Result<AnalysisCurve, string>>
+    saveAnalysisMapping: SaveAnalysisMapping -> Async<Result<unit, string>>
     getAppConfig: unit -> Async<Result<AppConfigView, string>>
     getTemplateFiles: unit -> Async<Result<TemplateFileInfo list, string>>
     previewGenerate: GeneratePreviewRequest -> Async<Result<GeneratePreviewResult, string>>
