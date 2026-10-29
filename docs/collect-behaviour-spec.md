@@ -1,5 +1,7 @@
 # Collect Behaviour Specification
 
+[README](../README.md) · [All documentation](index.md)
+
 ## Purpose
 
 `Collect` consolidates TOPAS run outputs for one generated batch (`seedBase`) with an independent serial pipeline for each discovered scorer:
@@ -78,7 +80,7 @@ Timestamp rules:
 
 ## Recollection policy
 
-- `runs/{seedBase}/` is the immutable source folder for Collect
+- `runs/{seedBase}/` is the source folder for Collect; the operator should preserve its contents for reproducibility
 - each timestamped output folder is one collection attempt
 - recollection is allowed and does not overwrite prior outputs
 - previous collection folders are retained for audit and comparison
@@ -143,7 +145,7 @@ Per phase-space index:
 - read one CSV per node in the group
 - require compatible row and column counts
 - preserve non-dose columns from the first file
-- sum the last numeric dose-like column across node files
+- resolve a recognized dose column from available headers, falling back to the last numeric column when there is no usable header, and sum it across node files
 - do not change the existing numeric node-merge behavior
 - write `merged-over-nodes/phspXX_merged.csv`
 
@@ -284,15 +286,27 @@ All-or-nothing for status:
 
 `generated_batch_collections` history rows:
 
-- one row per collect attempt
+- one row per collect execution attempt; read-only preview does not create a history row
 - stores `seed_base`, status, timestamps, output folder, summary path, file counts, and error message
 - preserves collect history even though `generated_batches` stores only the latest collect metadata
 
 ## Current limitations
 
 - CSV parser assumes compatible row/column structure across files being merged.
-- Merge logic assumes the last numeric column is the dose-like value to sum.
+- When no usable dose header is available, the merge fallback assumes the last numeric column is dose-like.
 - Missing/empty/non-numeric CSV files block collect.
 - Missing TOPAS completion timing footer blocks collect.
 - No manual "collect into an arbitrary existing run folder" workflow yet.
 
+
+## Implementation boundaries and source links
+
+- [CollectPlanning.fs](../src/Server/CollectPlanning.fs): scans each generated output directory, accepts the exact lower-case `.csv` extension, matches literal stems by longest owner, and sorts suffixes using the normal string order. One leading underscore is removed for the folder name. Upper/lower-case folder collisions are rejected.
+- [CollectPreflight.fs](../src/Server/CollectPreflight.fs): the health scan looks for at least one numeric-looking row, not full-file consistency. Found/missing counts actually represent healthy/problematic expected files: empty or malformed files contribute to the reported missing/issue count even if present on disk. FileIssues can include excluded runs for diagnosis; effective counts and collect eligibility exclude them. Footer marker checks are case-insensitive token presence, not a parser proving execution order.
+- [CollectCsvMerge.fs](../src/Server/CollectCsvMerge.fs): recognized dose headers take precedence, with last-numeric-column fallback when no usable header exists. Node merging checks shape; it does not independently compare every source coordinate.
+- [CollectStatistics.fs](../src/Server/CollectStatistics.fs): subsequent phase-space merging and raw-batch uncertainty calculations perform additional row/coordinate checks. Normal successful preflight is not sufficient to guarantee successful merging.
+- [CollectOperation.fs](../src/Server/CollectOperation.fs): creates the history attempt before preflight and processes scorer families sequentially. Failure can leave a timestamp folder with some complete scorer files and some incomplete outputs.
+- After all scorer outputs and the root manifest succeed, the implementation writes `latest_collection.txt`, updates latest batch metadata, then marks the history row successful. These effects are sequential and are not rolled back together if a later marker/DB/history operation fails. The previous successful pointers are preserved for failures occurring in scorer processing, not guaranteed for every possible finalization failure.
+- Collect does not convert bin coordinates into mm or dose into Gy/MU. Analyse performs the supported geometry mapping separately.
+
+For operators: [daily workflow](daily-workflow.md#3-collect-the-results). For output columns and units: [data reference](data-reference.md).

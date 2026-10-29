@@ -1,5 +1,7 @@
 # Wizard UX Flow Specification
 
+[README](../README.md) · [All documentation](index.md)
+
 ## Purpose
 
 This document defines the current client wizard UX and behavior for:
@@ -7,6 +9,7 @@ This document defines the current client wizard UX and behavior for:
 - Generate
 - Run
 - Collect
+- Analyse workspace
 
 It reflects the shared app shell, shared wizard shell, and current step logic implemented in client code.
 
@@ -14,7 +17,7 @@ It reflects the shared app shell, shared wizard shell, and current step logic im
 
 - Single-row top navbar:
   - title: `Topas Run Orchestration`
-  - workflow buttons: `Generate`, `Run`, `Collect`
+  - workflow buttons: `Generate`, `Run`, `Collect`, `Analyse`
   - theme selector
 - Active page button is primary; inactive buttons are outlined.
 - Theme selector options:
@@ -26,7 +29,7 @@ It reflects the shared app shell, shared wizard shell, and current step logic im
 
 ## Shared wizard shell
 
-All workflows use one shared shell with:
+Generate, Run and Collect use one shared shell with:
 
 - left vertical stepper (all step titles visible)
 - right content area (scrollable)
@@ -151,5 +154,19 @@ Collect:
 
 ## Error display behavior
 
-- All workflows show server/client errors in wizard footer error alert area.
+- Generate, Run and Collect show server/client errors in the wizard footer error alert area.
+- Analyse shows workspace/API errors above the selected datasets and normalization errors beside the affected curve.
 - Long error text is scroll-constrained.
+
+
+## Analyse workspace
+
+Source: [AnalysisViews.fs](../src/Client/AnalysisViews.fs).
+
+Analyse does not use the wizard stepper or footer. It owns local React state and calls `listAnalysisDatasets`, `loadAnalysisCurve` and `saveAnalysisMapping`. It refreshes its dataset list on mount and provides an explicit Refresh action.
+
+The workspace has a scrollable dataset checklist, selected-curve mapping cards, normalization/formula/region/reference controls, separate plots by role, metric tables and CSV download links. API calls disable dataset toggling while loading. Mapping edits set Confirmed=false; saving re-enables the curve after server validation. Inferred supported mappings are already confirmed.
+
+Formula dropdown selections are stored in browser localStorage. Other workspace selection state is not saved as an analysis session. Point tooltips are native SVG title tooltips; physical plot-limit inputs provide interval inspection. There is no drag-zoom or figure-export control.
+
+See [the analysis guide](analysis-guide.md) for operator steps and [the analysis specification](analyse-behaviour-spec.md) for calculation boundaries.

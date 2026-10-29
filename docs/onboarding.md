@@ -1,63 +1,59 @@
-# Onboarding Guide
+# Local setup
 
-## 1. Prerequisites
+[README](../README.md) · [All documentation](index.md)
 
-- .NET 8 SDK
-- Node.js (for client development tooling)
-- Access to a writable `AppRoot` location
+This guide starts a development copy on Windows. To update an installed Linux service, use [deployment](how-to-deploy.md).
 
-Optional for full Run workflow:
+## Prerequisites
 
-- Slurm (`sbatch`) available on host
-- TOPAS executable available on host
+- Git, .NET 8 SDK compatible with [global.json](../global.json), Node.js and npm.
+- Node 20 is the established development environment; package versions are locked in the client lockfile and Paket lockfile.
+- A writable local folder for AppRoot.
+- TOPAS and Slurm are needed for real simulation execution, not for automated server tests or UI development.
 
-## 2. First local setup
-
-1. Open `src/Server/appsettings.json`.
-2. Set `Tsebt:AppRoot` to a local writable folder.
-3. Verify paths under `Tsebt:Paths`.
-4. Verify node names/digits and phase-space entries.
-5. For Run on Slurm, verify:
-   - `Tsebt:Slurm:Partition`
-   - `Tsebt:Slurm:CpusPerTask`
-   - `Tsebt:Slurm:Account` (cluster-specific, optional in local dev)
-6. Verify `Tsebt:Topas:Executable` points to a valid TOPAS command/wrapper.
-
-## 3. Run the app
+## 1. Get the source
 
 ```powershell
-dotnet run --project .\src\Server
+git clone https://github.com/emintavlayan/topas-run-orchestration.git
+cd topas-run-orchestration
+dotnet tool restore
+dotnet paket restore
 ```
 
-Then open the client URL shown by the server.
+Check out the branch containing the features you intend to use. `git pull --ff-only` updates the current tracking branch; it does not bring an unmerged feature branch into `main`.
 
-## 4. Expected workflow
+## 2. Configure a local data root
 
-1. Generate: create one batch (`seedBase`) and input files.
-2. Run: preflight, preview Slurm script, submit with `sbatch`.
-3. Collect: preflight outputs, merge over nodes, merge over phase-space files, compute Type A uncertainty of the final summed dose.
-   Each collect attempt writes a new timestamped output folder without changing `runs/{seedBase}`.
-
-## 5. Key runtime folders
-
-```text
-inputs/{seedBase}   generated TOPAS input files
-runs/{seedBase}     immutable manifest/script and TOPAS CSV/log source outputs
-outputs/{seedBase}  latest_collection.txt plus timestamped collection folders
-outputs/{seedBase}/{timestamp}  collect_manifest.tsv + merged-over-nodes + merged-over-phsp + dose_with_uncertainty.csv
-```
-
-## 6. Test before changes
+In the PowerShell session that will launch the app:
 
 ```powershell
-dotnet test Application.sln --logger "console;verbosity=normal"
+$env:Tsebt__AppRoot = 'C:\Dev\tsebt-local-root'
 ```
 
-## 7. Where to read next
+The server creates its required root folders at startup. Copy your TOPAS template components into that root's `templates` directory. Configure the remaining settings in [src/Server/appsettings.json](../src/Server/appsettings.json), or override them with environment variables. Use platform-native relative paths, including `database/app.db` on Linux. [Configuration reference →](configuration.md)
 
-- App overview: `docs/app-behaviour-spec.md`
-- Unified wizard UX: `docs/wizard-ux-flow-spec.md`
-- Generate details: `docs/generate-behaviour-spec.md`
-- Run details: `docs/run-behaviour-spec.md`
-- Collect details: `docs/collect-behaviour-spec.md`
-- Test scope: `docs/test-coverage.md`
+## 3. Start the complete development app
+
+```powershell
+dotnet run --project .\Build.fsproj
+```
+
+The default build target restores client npm dependencies, builds the solution, and starts the server and Fable/Vite watchers. Open [http://localhost:8080](http://localhost:8080) for the browser UI. The development API listens on port **5000**.
+
+Keep this terminal open. Stop the development processes with Ctrl+C. A server-only `dotnet run --project .\src\Server` does not start the Vite browser UI.
+
+## 4. Verify without submitting simulations
+
+```powershell
+dotnet test .\tests\Server.Tests\Server.Tests.fsproj
+```
+
+Open all four tabs. Generate preview requires configured templates; Analyse needs existing collected outputs. Real Run submission requires the app to execute on a host with the configured Slurm/TOPAS tools and shared paths.
+
+## 5. Build a production bundle
+
+```powershell
+dotnet run --project .\Build.fsproj -- Bundle
+```
+
+This produces published server files and the browser bundle under `deploy`. For Windows-to-Linux deployment, use the deployment helper rather than copying Windows publish output directly. [Next: deploy the application →](how-to-deploy.md)

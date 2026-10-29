@@ -1,202 +1,63 @@
 # TopasRunOrchestration
 
-TopasRunOrchestration is a SAFE Stack F# web application that prepares, submits, and collects TOPAS Monte Carlo simulation batches for TSEBT workflows.
+Prepare, run, collect and compare TOPAS Monte Carlo simulations from one browser app.
+Built with F# and SAFE for TSEBT commissioning.
 
-## What it does
+## The whole workflow
 
-The application currently supports three end-to-end workflows:
+| Tab | You do | The app produces |
+|---|---|---|
+| **Generate** | Select templates, nodes and phase-space files; review the input | One batch ID and a generated TOPAS input per node/phase-space pair |
+| **Run** | Select that batch, check preflight, submit | Per-node Slurm arrays and job IDs |
+| **Collect** | Check completed CSVs/logs; exclude failed nodes or phase spaces if needed | Separate merged dose and uncertainty files for every discovered scorer |
+| **Analyse** | Select collected curves, check detected geometry, choose normalization and metrics | PDD/profile overlays, reference differences, R50 and profile metrics; CSV exports |
 
-1. Generate
-2. Run
-3. Collect
+**Example:** 7 nodes × 22 phase-space files = 154 runs. Each run can produce `_pdd`, `_xprofile`, `_yprofile`, or any future suffix. One Collect action processes each scorer separately. [Walk through a batch →](docs/daily-workflow.md)
 
-At a high level:
+## Pick your starting point
 
-- `Generate` builds TOPAS input files from selected templates, nodes, and phase-space files.
-- `Run` prepares Slurm manifest/script files and submits the batch with `sbatch`.
-- `Collect` reads TOPAS CSV/log outputs, merges node outputs per phase-space, merges the phase-space totals into a final summed dose grid, and computes Type A statistical uncertainty on that summed dose.
+| I want to… | Read this |
+|---|---|
+| Use the installed application | [Daily workflow](docs/daily-workflow.md) |
+| Run a development copy | [Local setup](docs/onboarding.md) |
+| Configure paths, nodes and TOPAS | [Configuration](docs/configuration.md) |
+| Update the Linux application from Windows | [Deployment](docs/how-to-deploy.md) |
+| Understand files, units and batch IDs | [Data and file reference](docs/data-reference.md) |
+| Compare curves and understand the formulas | [Analysis guide](docs/analysis-guide.md) |
+| Diagnose a failed step | [Troubleshooting](docs/troubleshooting.md) |
+| Change the code or verify it | [Developer guide](docs/development.md) |
 
-## Runtime model
+## Already have the repository and server?
 
-The app runs as a server with browser-based UI clients.
-
-- Server owns file system, SQLite, and orchestration logic.
-- Client owns wizard UI state and API calls.
-- Shared project owns DTOs and API contracts.
-
-## UI model
-
-- Client UI is styled with Tailwind CSS + daisyUI.
-- Generate, Run, and Collect use a shared vertical wizard shell in `src/Client/WizardShell.fs`.
-- Generate Review syntax-highlights TOPAS comments, parameter types and paths, values, units, and unresolved placeholders without changing the stitched input text.
-- The UI uses CSS-only components (no JavaScript UI library wrappers).
-
-## AppRoot folder structure
-
-The app is driven by one configured root path (`Tsebt:AppRoot`).
-
-```text
-templates/   TOPAS source template/component files
-inputs/      generated TOPAS input files at inputs/{seedBase}/
-runs/        run artifacts and TOPAS run outputs at runs/{seedBase}/
-outputs/     collect outputs at outputs/{seedBase}/{timestamp}/ plus latest_collection.txt
-database/    SQLite database
-logs/        application/runtime logs
-```
-
-Notes:
-
-- Phase-space files are not copied or managed by this app.
-- Collect reads from shared `runs/{seedBase}` in the current model.
-- `runs/{seedBase}` is the immutable source folder for recollection.
-
-## Generate summary
-
-- Seed rule: `seed = seedBase + nodeDigit`
-- RunId rule: `seed{seed}_phsp{phaseSpaceIndex}`
-- Generated input file: `seed{seed}_phsp{phaseSpaceIndex}.txt`
-- Output placeholder target: `{AppRoot}/runs/{seedBase}/{runId}`
-
-Generate is collision-safe and all-or-nothing.
-
-## Run summary
-
-- Runs against one generated batch (`seedBase`).
-- Writes:
-
-```text
-runs/{seedBase}/run_manifest.tsv
-runs/{seedBase}/run_batch.slurm
-```
-
-- Manifest columns:
-  - task id
-  - node name
-  - run id
-  - input file path
-  - log file path
-
-- Slurm execution line:
-
-```bash
-srun --nodes=1 --ntasks=1 --nodelist="$NODE_NAME" "$TOPAS" "$INPUT_FILE" > "$LOG_FILE" 2>&1
-```
-
-- Double-submit is blocked when already submitted.
-
-## Collect summary
-
-- Discover all CSV scorer suffixes from generated output stems without a fixed scorer-name list.
-- Preflight requires the same healthy scorer set for every retained run, with one shared log per run.
-- Each scorer is merged and assigned uncertainty independently; preview and result show every scorer.
-- Suffix-less CSVs are collected into `default/`.
-- Missing CSV blocks collect.
-- Missing log is warning-only in current behavior.
-- Produces:
-
-```text
-outputs/{seedBase}/latest_collection.txt
-outputs/{seedBase}/{timestamp}/collect_manifest.tsv
-outputs/{seedBase}/{timestamp}/{scorer}/collect_manifest.tsv
-outputs/{seedBase}/{timestamp}/{scorer}/merged-over-nodes/phsp{phaseSpaceIndex}_merged.csv
-outputs/{seedBase}/{timestamp}/{scorer}/merged-over-phsp/dose_merged.csv
-outputs/{seedBase}/{timestamp}/{scorer}/dose_with_uncertainty.csv
-```
-
-- Primary final outputs are `merged-over-phsp/dose_merged.csv` and `dose_with_uncertainty.csv`.
-- `dose_with_uncertainty.csv` keeps the final summed `dose_to_medium_Gy` and reports `relative_uncertainty_percent` relative to that summed dose:
-  `100 * standard_uncertainty_Gy / dose_to_medium_Gy`.
-- This uncertainty is for the summed dose, not the standard error of an arithmetic mean dose.
-
-## Recollection policy
-
-- Collect always reads from the existing `runs/{seedBase}/` folder.
-- Each collect attempt writes to a new timestamped folder: `outputs/{seedBase}/{timestamp}/`.
-- Previous collection folders are retained for audit and comparison and are never overwritten.
-- `outputs/{seedBase}/latest_collection.txt` points to the most recent collection folder.
-- Recollection is expected when merge logic or uncertainty logic changes.
-
-## Build, run, test
-
-Build:
+In **Windows PowerShell**, from the repository root on the branch containing the changes:
 
 ```powershell
-dotnet build Application.sln
-```
-
-Run server:
-
-```powershell
-dotnet run --project .\src\Server
-```
-
-Run tests:
-
-```powershell
-dotnet test Application.sln
-```
-
-## Analyse
-
-The Analyse tab selects multiple collected scorer outputs, derives physical coordinates from their generated inputs, overlays normalized curves and uncertainty bands, and exports curve/metric tables. Flatness and symmetry default to ratio definitions (ideal 100%), with independent selectable difference definitions. PDD metrics include distal R50/R80/R90. See [analysis conventions](docs/analyse-behaviour-spec.md).
-
-## Deploy from Windows
-
-```powershell
+git pull --ff-only
 .\scripts\deploy-app.ps1
 ```
 
-After tests and Bundle have already passed for the current revision:
+The script tests, bundles, publishes for Linux, uploads, preserves production configuration, backs up the installed app, restarts systemd and checks HTTP health. It attempts rollback on startup failure. [Details and `-SkipBuild` usage →](docs/how-to-deploy.md)
 
-```powershell
-.\scripts\deploy-app.ps1 -SkipBuild
-```
+## Where the data lives
 
-Publishes for Linux, uploads, preserves server configuration, backs up the previous application, restarts systemd, and verifies HTTP health. Startup failure restores the previous application. See [deployment instructions](docs/how-to-deploy.md).
+The web app runs on the server and reads the configured **AppRoot**. Browsers do not need local simulation files.
 
-## Testing
+| Location under AppRoot | Purpose |
+|---|---|
+| `templates/` | TOPAS source components |
+| `inputs/{batch}/` | Generated inputs; also the source for analysis geometry detection |
+| `runs/{batch}/` | Raw scorer CSVs, run logs and Slurm files |
+| `outputs/{batch}/{timestamp}/{scorer}/` | Independent collected results per scorer |
+| `database/` | SQLite orchestration metadata; exact path is configurable |
 
-Server tests are xUnit-based and run via `dotnet test Application.sln`.
+Keep generated inputs and raw outputs for reproducibility. Collect can run again into a new timestamp folder. [Exact paths, columns and units →](docs/data-reference.md)
 
-Automated tests:
+## Interpretation at a glance
 
-- do not require TOPAS
-- do not require Slurm
-- use temporary folders and fake CSV/process output fixtures
+- Collection requires healthy CSVs for every retained scorer/run and a successful TOPAS timing footer in every retained log.
+- Dose is **summed Gy**, not automatically Gy/MU. Uncertainty describes the summed dose.
+- Coordinates remain source bin values until Analyse derives or receives a physical mapping.
+- Flatness and symmetry default to ratio definitions: **100% is ideal**. Each formula is independently selectable.
+- Analyse supports 1D collected scorers. Measurement import, 3D slicing and gamma are future work.
 
-Manual smoke testing is still required for:
-
-- real Slurm scheduling behavior
-- real TOPAS execution runtime behavior
-- clinical interpretation of real dose outputs
-
-## Documentation map
-
-Start here for onboarding:
-
-- `docs/onboarding.md`
-
-Workflow behaviour:
-
-- `docs/app-behaviour-spec.md`
-- `docs/generate-behaviour-spec.md`
-- `docs/run-behaviour-spec.md`
-- `docs/collect-behaviour-spec.md`
-
-UX and client flow:
-
-- `docs/wizard-ux-flow-spec.md`
-
-Engineering style:
-
-- `docs/safe-light-fsharp-doctrine.md`
-
-Operations and deployment:
-
-- `docs/how-to-deploy.md`
-- `docs/systemd-deployment.md`
-
-Testing:
-
-- `docs/test-coverage.md`
-
+[Browse all documentation and technical references →](docs/index.md)

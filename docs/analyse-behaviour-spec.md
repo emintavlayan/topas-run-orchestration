@@ -1,5 +1,7 @@
 # Analyse collected outputs
 
+[README](../README.md) · [All documentation](index.md)
+
 Analyse reads final `dose_with_uncertainty.csv` files from the configured output root. The CSV's dose and standard uncertainty are both in Gy. Coordinate columns retain TOPAS bin coordinates: Collect does not convert them to millimetres.
 
 ## Geometry detection
@@ -30,7 +32,7 @@ Defaults for both flatness and symmetry are ratio definitions with an ideal valu
 - Flatness difference: `100 * (Dmax-Dmin)/(Dmax+Dmin)`, ideal zero.
 - Symmetry absolute point difference: `100 * max(abs(D(x)-D(2*CAX-x)))/D(CAX)`, ideal zero.
 
-No vendor name is assigned to these definitions. Primary software documentation describes the alternative conventions: https://pylinac.readthedocs.io/en/latest/topics/profiles.html
+No vendor name is assigned to these definitions. Primary software documentation describes the alternative conventions: [Pylinac profile metric definitions](https://pylinac.readthedocs.io/en/latest/topics/profiles.html)
 
 The default evaluation fraction is 0.8 of the symmetric half-field limited by the nearer 50% edge about the specified CAX. It equals the central 80% of FWHM for a centred field. The UI displays this convention; no automatic recentering hides offsets. Mirrored sample knots and region boundaries are interpolated before evaluating extrema. Non-positive denominators give unavailable values.
 
@@ -43,3 +45,17 @@ Profile results include FWHM, centre from outer 50% crossings, and separate left
 The fixture combines the current water-tank, PDD and X-profile templates from `emintavlayan/tsebt-monte-carlo-notes-and-decisions`, revision `5f0d278d4342a90778388197d418f9c96eb28c36`, substituting the output stem only.
 
 Measured-data import, automatic slices from 3D scorers, gamma and uncertainty propagation for derived metrics are subsequent extensions.
+
+## Implementation boundaries and source links
+
+- [AnalysisOperation.fs](../src/Server/AnalysisOperation.fs) discovers exact `dose_with_uncertainty.csv` filenames recursively, ordered by descending relative ID. It does not filter on SQLite collection status. A file left by an unsuccessful collection may therefore be listed; verify its provenance.
+- Loading requires named dose/uncertainty columns, at least two samples, finite numeric values, non-negative doses/uncertainties and unique coordinates along the selected axis. Files larger than 50,000,000 bytes are rejected. More than one varying coordinate axis is rejected.
+- [AnalysisInput.fs](../src/Server/AnalysisInput.fs) reads parameter assignments from generated text; last overrides win. It is a restricted parser, not a TOPAS interpreter: it does not expand IncludeFile statements or arithmetic expressions. Direct numeric references have a recursion limit. Length literals support mm/cm/m/um; degrees/radians are recognized for rotation checks.
+- Scorer matching is case-sensitive and expects an OutputFile ending in an underscore plus the collected folder name. This is narrower than Collect's arbitrary suffix discovery. `default` cannot be automatically identified. Bin counts must be explicitly available as the scorer axis Bins parameter and equal sample count.
+- Inferred X/Y positions accumulate unrotated geometry translations with CAX initialized to 0 mm. PDD requires a direct `G4_WATER` parent and measures depth from its negative-Z face. The parser does not derive SSD, field-size labels or beam-axis displacement from gantry/source definitions.
+- Explicit mapping validation requires a recognized role, axis 0–2, finite origin/CAX, finite non-zero spacing and Confirmed=true. It does not prove the mapping matches the physical experiment. Sidecar errors are surfaced as load errors; they are not silently replaced by inferred geometry.
+- [Analysis.fs](../src/Shared/Analysis.fs) uses linear segment crossings. For noisy/multi-peaked profiles, FWHM uses first/last 50% crossings; left penumbra uses the first qualifying crossing and right penumbra the last. There is no monotonic-fit/noise rejection. If two edges or a valid symmetric region are absent, the profile metric list can be empty rather than containing an unavailable row per metric.
+- [AnalysisViews.fs](../src/Client/AnalysisViews.fs) groups by the assigned role only. Matching role does not validate equal SSD, field size, depth, histories or weights. Differences use overlap without propagated uncertainty. Plot limits do not limit metrics; curve export includes all processed samples, not only the plotted interval. Numbers are formatted to six significant digits in the current exports.
+- Changing a mapping marks it unconfirmed until saved. API failures appear in the workspace; normalization failures appear beside the affected curve. Browser-local formula settings persist, but the selected curve list is not a saved analysis session.
+
+For operator examples, see the [analysis guide](analysis-guide.md).

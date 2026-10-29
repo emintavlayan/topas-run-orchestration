@@ -1,5 +1,7 @@
 # Deploying TopasRunOrchestration
 
+[README](../README.md) · [All documentation](index.md)
+
 ## Existing production service
 
 - SSH target: `fysiker@172.31.245.206` (`monte-carlo-01`)
@@ -10,6 +12,7 @@
 
 The deployment script requires this service and production `appsettings.json` to exist already.
 The production service user must be able to read the deployment directory.
+The server loads base `appsettings.json` plus environment variables; preserved environment-specific JSON files are not automatically loaded. See [configuration precedence](configuration.md#what-the-server-actually-loads).
 Run deployment when no collection operation is in progress; the web service is stopped briefly.
 
 ## Windows PowerShell
@@ -54,7 +57,7 @@ SSH or sudo may request your existing passwords interactively; the script stores
 8. Stop the service and rename the existing app directory to a timestamped backup.
 9. Move the staged application into place and start the service.
 10. Check service activity and HTTP responsiveness for up to 30 attempts.
-11. On failure after stopping, restore the previous directory and attempt to restart it. Keep a failed replacement for inspection when one was installed.
+11. On failure after stopping, attempt to restore the previous directory and restart it; report recovery failures explicitly. Keep a failed replacement for inspection when one was installed.
 
 Successful deployments retain the backup next to the application directory:
 
@@ -86,4 +89,4 @@ Override the target explicitly:
 .\scripts\deploy-app.ps1 -SshTarget 'user@server' -DeployPath '/home/user/WebApps/TopasRunOrchestration' -ServiceName 'topas-run-orchestration.service' -HealthUrl 'http://127.0.0.1:5000/'
 ```
 
-For initial service creation, see `systemd-deployment.md`. Use the actual installation path consistently in `WorkingDirectory` and `ExecStart`.
+For initial service creation, see [systemd setup](systemd-deployment.md). Use the actual installation path consistently in `WorkingDirectory` and `ExecStart`.
