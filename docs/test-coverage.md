@@ -18,9 +18,14 @@ This checklist tracks practical behavioral coverage for implemented server workf
 | Collect CSV merge | Covered | `CollectTests.fs` |
 | Collect statistics | Covered | `CollectTests.fs` |
 | Collect operation | Covered | `CollectTests.fs` |
+| Arbitrary scorer suffixes, mixed legacy CSVs, distinct scorer grids | Covered | `CollectTests.fs` |
+| Per-scorer health, exclusions, independent uncertainty and shared log counts | Covered | `CollectTests.fs` |
+| Longest-stem discovery, unsafe folder names and naming collisions | Covered | `CollectTests.fs` |
+| Multi-scorer failure and successful latest/history preservation | Covered | `CollectTests.fs` |
 
 Notes:
 
 - This is workflow-level behavioral coverage, not line/branch coverage.
 - Tests use temporary folders and fake CSV/process output fixtures.
 - Real Slurm execution and real TOPAS execution remain manual smoke-test responsibilities.
+

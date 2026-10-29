@@ -193,6 +193,7 @@ type CollectFileIssue = {
 
 type CollectPreflightResult = {
     SeedBase: string
+    Scorers: string list
     CanCollect: bool
     ExpectedRunCount: int
     EffectiveRunCount: int
@@ -215,8 +216,17 @@ type CollectPreviewRequest = {
     ExcludedNodeDigits: string list
 }
 
+type CollectScorerPaths = {
+    Scorer: string
+    OutputFolder: string
+    SummaryPath: string
+    UncertaintyPath: string
+    ManifestPath: string
+}
+
 type CollectPreviewResult = {
     SeedBase: string
+    Scorers: CollectScorerPaths list
     ExpectedRunCount: int
     PhaseSpaceCount: int
     NodeCount: int
@@ -243,6 +253,7 @@ type CollectedPhaseSpaceResult = {
 
 type CollectResult = {
     SeedBase: string
+    Scorers: CollectScorerPaths list
     ExpectedRunCount: int
     CsvReadCount: int
     LogFoundCount: int
@@ -276,3 +287,4 @@ type ITopasApi = {
     previewCollect: CollectPreviewRequest -> Async<Result<CollectPreviewResult, string>>
     collectBatch: CollectRequest -> Async<Result<CollectResult, string>>
 }
+

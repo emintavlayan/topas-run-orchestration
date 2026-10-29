@@ -7,6 +7,7 @@ open Microsoft.Data.Sqlite
 open Xunit
 open Server.Tests.TestHelpers
 open CollectOperation
+open CollectPlanning
 open CollectPreflight
 open CollectCsvMerge
 open CollectStatistics
@@ -494,10 +495,10 @@ let ``Collect operation writes outputs and updates status`` () =
         let outputRootFolder = Path.Combine(appRoot, "outputs", "1001")
         let latestMarkerPath = Path.Combine(outputRootFolder, "latest_collection.txt")
         Assert.StartsWith(outputRootFolder, result.OutputFolder, StringComparison.OrdinalIgnoreCase)
-        let mergedOverNodesFolder = Path.Combine(result.OutputFolder, "merged-over-nodes")
-        let mergedOverPhspFolder = Path.Combine(result.OutputFolder, "merged-over-phsp")
+        let mergedOverNodesFolder = Path.Combine(result.OutputFolder, "default", "merged-over-nodes")
+        let mergedOverPhspFolder = Path.Combine(result.OutputFolder, "default", "merged-over-phsp")
         let mergedDosePath = Path.Combine(mergedOverPhspFolder, "dose_merged.csv")
-        let uncertaintyPath = Path.Combine(result.OutputFolder, "dose_with_uncertainty.csv")
+        let uncertaintyPath = Path.Combine(result.OutputFolder, "default", "dose_with_uncertainty.csv")
         Assert.True(File.Exists(Path.Combine(result.OutputFolder, "collect_manifest.tsv")))
         Assert.True(File.Exists(Path.Combine(mergedOverNodesFolder, "phsp01_merged.csv")))
         Assert.True(File.Exists(mergedDosePath))
@@ -585,8 +586,8 @@ let ``Collect operation allows recollection and preserves prior timestamped outp
         Assert.NotEqual<string>(firstResult.OutputFolder, secondResult.OutputFolder)
         Assert.True(Directory.Exists(firstResult.OutputFolder))
         Assert.True(Directory.Exists(secondResult.OutputFolder))
-        Assert.True(File.Exists(Path.Combine(firstResult.OutputFolder, "merged-over-phsp", "dose_merged.csv")))
-        Assert.True(File.Exists(Path.Combine(secondResult.OutputFolder, "merged-over-phsp", "dose_merged.csv")))
+        Assert.True(File.Exists(Path.Combine(firstResult.OutputFolder, "default", "merged-over-phsp", "dose_merged.csv")))
+        Assert.True(File.Exists(Path.Combine(secondResult.OutputFolder, "default", "merged-over-phsp", "dose_merged.csv")))
 
         let latestMarkerPath = Path.Combine(appRoot, "outputs", "1043", "latest_collection.txt")
         Assert.True(File.Exists(latestMarkerPath))
@@ -664,7 +665,7 @@ let ``Collect operation applies phase-space exclusions to merge and manifest`` (
         Assert.Equal(2, result.ExpectedRunCount)
         Assert.Equal(1, result.MergedPhaseSpaceCount)
 
-        let outputFolder = result.OutputFolder
+        let outputFolder = result.Scorers.Head.OutputFolder
         Assert.True(File.Exists(Path.Combine(outputFolder, "merged-over-nodes", "phsp01_merged.csv")))
         Assert.False(File.Exists(Path.Combine(outputFolder, "merged-over-nodes", "phsp20_merged.csv")))
         Assert.True(File.Exists(Path.Combine(outputFolder, "merged-over-phsp", "dose_merged.csv")))
@@ -767,3 +768,189 @@ let ``Collect preflight reports particle-id failure when TOPAS footer is missing
         Assert.Contains("does not support particle ID: 36", defaultArg logIssue.Message "")
     finally
         cleanupTestDirectory appRoot
+
+
+/// Runs an integration check against a balanced two-node, two-phase-space multi-scorer batch.
+let private withScorerBatch (suffixes: string list) action =
+    let appRoot = Path.Combine(Path.GetTempPath(), $"xunit-multi-scorer-{Guid.NewGuid():N}")
+    try
+        let settings = buildSettings appRoot
+        assertOk (Bootstrap.ensureRootFolders settings) |> ignore
+        assertOk (initialize settings) |> ignore
+        let folder = Path.Combine(appRoot, "runs", "1001")
+        Directory.CreateDirectory folder |> ignore
+        let rows : CollectPlanning.CollectRunRow list =
+            [ for phase in [ "01"; "02" ] do
+                for node in [ "1"; "2" ] do
+                    let runId = $"seed1001{node}_phsp{phase}"
+                    { RunId = runId; PhaseSpaceIndex = phase; NodeDigit = node; OutputFilePath = Path.Combine(folder, runId) } ]
+        let dbPath = Path.Combine(appRoot, "database", "app.db")
+        use connection = new SqliteConnection($"Data Source={dbPath}")
+        connection.Open()
+        seedGeneratedBatch connection "1001"
+            (rows |> List.map (fun row -> row.RunId, row.PhaseSpaceIndex, row.NodeDigit, row.OutputFilePath + ".txt", row.OutputFilePath))
+        rows |> List.iteri (fun batchIndex row ->
+            File.WriteAllText(row.OutputFilePath + ".log", successfulTopasFooter)
+            suffixes |> List.iteri (fun scorerIndex suffix ->
+                // Different scorer grids must never be combined with each other.
+                let data = [ for voxel in 0 .. scorerIndex -> "0", string voxel, "0", float ((batchIndex + 1) * (scorerIndex + 1)) ]
+                writeRawDoseCsv (row.OutputFilePath + suffix + ".csv") data))
+        action settings rows connection
+    finally
+        cleanupTestDirectory appRoot
+
+/// Checks scorer separation, arbitrary suffixes, independent uncertainty, shared logs and one history entry.
+[<Fact>]
+let ``Collect discovers arbitrary scorers and merges each grid independently`` () =
+    withScorerBatch [ "_pdd"; "_x"; "_future-dose.v2"; "" ] (fun settings rows connection ->
+        let preview = assertOk (previewCollect settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] })
+        Assert.True(preview.Preflight.CanCollect)
+        Assert.Equal(16, preview.Preflight.FoundCsvCount)
+        Assert.Equal(4, preview.Preflight.FoundLogCount)
+        Assert.Equal(4, preview.Scorers.Length)
+        Assert.Equal(8, preview.PlannedMergedFiles.Length)
+        let collected = assertOk (collectBatch settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] })
+        Assert.Equal(16, collected.CsvReadCount)
+        Assert.Equal(4, collected.LogFoundCount)
+        Assert.Equal(2, collected.MergedPhaseSpaceCount)
+        Assert.Equal(8, collected.MergedFiles.Length)
+        for (name, scale) in [ "pdd", 1; "x", 2; "future-dose.v2", 3; "default", 4 ] do
+            let paths = collected.Scorers |> List.find (fun paths -> paths.Scorer = name)
+            Assert.Equal(Path.Combine(collected.OutputFolder, name), paths.OutputFolder)
+            let summary = File.ReadAllLines paths.SummaryPath
+            let uncertainty = File.ReadAllLines paths.UncertaintyPath
+            Assert.Equal(scale + 1, summary.Length)
+            Assert.Equal(scale + 1, uncertainty.Length)
+            for index in 1 .. scale do
+                let dose = Double.Parse(summary[index].Split(',')[3], CultureInfo.InvariantCulture)
+                let stats = uncertainty[index].Split(',')
+                Assert.Equal(10.0 * float scale, dose, 10)
+                Assert.Equal(dose, Double.Parse(stats[3], CultureInfo.InvariantCulture), 10)
+                Assert.Equal("4", stats[4])
+                Assert.Equal(25.8198889747, Double.Parse(stats[8], CultureInfo.InvariantCulture), 7)
+            let manifest = File.ReadAllLines paths.ManifestPath
+            Assert.Equal(5, manifest.Length)
+            Assert.Contains(rows.Head.OutputFilePath + ".log", String.concat "\n" manifest)
+        Assert.Equal(17, File.ReadAllLines(collected.ManifestPath).Length)
+        use count = connection.CreateCommand()
+        count.CommandText <- "SELECT COUNT(*) FROM generated_batch_collections;"
+        Assert.Equal(1L, count.ExecuteScalar() :?> int64)
+        let original = File.ReadAllText(rows.Head.OutputFilePath + "_pdd.csv")
+        let recollected = assertOk (collectBatch settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] })
+        Assert.NotEqual<string>(collected.OutputFolder, recollected.OutputFolder)
+        Assert.Equal(original, File.ReadAllText(rows.Head.OutputFilePath + "_pdd.csv"))
+        for scorer in collected.Scorers do Assert.True(File.Exists scorer.SummaryPath))
+
+/// Checks that every discovered scorer must be healthy for every retained run.
+[<Theory>]
+[<InlineData("missing", "MissingCsv")>]
+[<InlineData("empty", "EmptyCsv")>]
+[<InlineData("header", "NoNumericCsvRows")>]
+let ``Collect blocks unhealthy files within any scorer family`` (failure: string) (problem: string) =
+    withScorerBatch [ "_pdd"; "_custom" ] (fun settings rows connection ->
+        let path = rows.Head.OutputFilePath + "_custom.csv"
+        match failure with
+        | "missing" -> File.Delete path
+        | "empty" -> File.WriteAllText(path, "")
+        | _ -> File.WriteAllText(path, "# header only")
+        let preview = assertOk (previewCollect settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] })
+        Assert.False(preview.Preflight.CanCollect)
+        Assert.Equal(7, preview.Preflight.FoundCsvCount)
+        Assert.Equal(1, preview.Preflight.MissingCsvCount)
+        Assert.Contains(preview.Preflight.FileIssues, fun issue -> issue.Path = path && issue.Problem = problem)
+        assertError (collectBatch settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] }) |> ignore
+        Assert.False(File.Exists(CollectPlanning.latestCollectionMarkerPath settings "1001"))
+        use status = connection.CreateCommand()
+        status.CommandText <- "SELECT collect_status FROM generated_batches;"
+        Assert.Equal("NotCollected", string (status.ExecuteScalar())))
+
+/// Checks exclusions before determining the retained scorer set and expected CSV count.
+[<Theory>]
+[<InlineData(true)>]
+[<InlineData(false)>]
+let ``Collect applies exclusions consistently to every scorer`` (excludeNode: bool) =
+    withScorerBatch [ "_pdd"; "_x" ] (fun settings rows _ ->
+        let excluded = rows |> List.filter (fun row -> if excludeNode then row.NodeDigit = "2" else row.PhaseSpaceIndex = "02")
+        for row in excluded do
+            File.Delete(row.OutputFilePath + "_x.csv")
+            // Scorers found only in excluded runs must not leak into the effective collection.
+            writeRawDoseCsv (row.OutputFilePath + "_excluded-only.csv") [ "0", "0", "0", 99.0 ]
+        let nodeExclusions = if excludeNode then [ "2" ] else []
+        let phaseExclusions = if excludeNode then [] else [ "02" ]
+        let preview = assertOk (previewCollect settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = phaseExclusions; ExcludedNodeDigits = nodeExclusions })
+        Assert.True(preview.Preflight.CanCollect)
+        Assert.Equal(4, preview.Preflight.FoundCsvCount)
+        Assert.Equal(2, preview.Preflight.FoundLogCount)
+        Assert.Equal<string list>([ "pdd"; "x" ], preview.Preflight.Scorers)
+        let collected = assertOk (collectBatch settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = phaseExclusions; ExcludedNodeDigits = nodeExclusions })
+        for paths in collected.Scorers do
+            let manifest = File.ReadAllText paths.ManifestPath
+            for row in excluded do Assert.DoesNotContain(row.RunId, manifest))
+
+/// Checks that a failed later scorer cannot replace the latest successful collection or metadata.
+[<Fact>]
+let ``Failed scorer preserves latest successful collection`` () =
+    withScorerBatch [ "_a"; "_z" ] (fun settings rows connection ->
+        let request : Shared.CollectRequest = { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] }
+        let first = assertOk (collectBatch settings request)
+        let marker = File.ReadAllText(CollectPlanning.latestCollectionMarkerPath settings "1001")
+        writeRawDoseCsv (rows.Head.OutputFilePath + "_z.csv") [ "9", "0", "0", 1.0 ]
+        let failure = assertError (collectBatch settings request)
+        Assert.Contains("Scorer 'z'", failure)
+        Assert.Equal(marker, File.ReadAllText(CollectPlanning.latestCollectionMarkerPath settings "1001"))
+        let details = assertOk (getCollectBatchDetails settings "1001")
+        Assert.Equal(Some first.OutputFolder, details.LatestCollectionFolder)
+        Assert.Equal("Collected", details.CollectStatus)
+        use history = connection.CreateCommand()
+        history.CommandText <- "SELECT COUNT(*) FROM generated_batch_collections WHERE status = 'Failed';"
+        Assert.Equal(1L, history.ExecuteScalar() :?> int64))
+
+/// Checks longest-stem ownership and literal matching when run names overlap or contain wildcard characters.
+[<Fact>]
+let ``Scorer discovery assigns overlapping run stems to their longest owner`` () =
+    withScorerBatch [] (fun settings rows _ ->
+        let first = rows.Head
+        let longer = { first with RunId = first.RunId + "0"; OutputFilePath = first.OutputFilePath + "0" }
+        let special = { first with RunId = "run[1]"; OutputFilePath = Path.Combine(Path.GetDirectoryName first.OutputFilePath, "run[1]") }
+        File.WriteAllText(longer.OutputFilePath + "_long.csv", "data")
+        File.WriteAllText(special.OutputFilePath + "-anything.csv", "data")
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName first.OutputFilePath, "unrelated.csv"), "data")
+        let allRows = special :: longer :: rows
+        let selected = assertOk (CollectPlanning.discoverCollectScorers allRows [ first; special ])
+        Assert.Equal<string list>([ "-anything" ], selected |> List.map _.Name)
+        let all = assertOk (CollectPlanning.discoverCollectScorers allRows allRows)
+        Assert.Equal(2, all.Length)
+        Assert.Contains(all, fun scorer -> scorer.Suffix = "_long"))
+
+/// Checks explicit rejection of unsafe or ambiguous output folder names before any collection writes.
+[<Theory>]
+[<InlineData("_..", "_x")>]
+[<InlineData("_", "_x")>]
+[<InlineData("", "_default")>]
+[<InlineData("_x", "x")>]
+[<InlineData("_X", "_x")>]
+let ``Scorer discovery blocks folder traversal and naming collisions`` (first: string) (second: string) =
+    withScorerBatch [ first; second ] (fun settings _ _ ->
+        let preview = assertOk (previewCollect settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] })
+        Assert.False(preview.Preflight.CanCollect)
+        Assert.Contains(preview.Preflight.Checks, fun check -> check.Name = "Scorer CSV families discovered" && not check.Ok)
+        assertError (collectBatch settings { SeedBase = "1001"; ExcludedPhaseSpaceIndexes = []; ExcludedNodeDigits = [] }) |> ignore
+        Assert.False(Directory.Exists(CollectPlanning.outputFolderPath settings "1001")))
+
+/// Checks the current production CSV names without requiring any predefined scorer list.
+[<Fact>]
+let ``Scorer discovery recognizes seed11137 phsp21 production files`` () =
+    withScorerBatch [] (fun _ rows _ ->
+        let row =
+            { rows.Head with
+                RunId = "seed11137_phsp21"
+                PhaseSpaceIndex = "21"
+                NodeDigit = "7"
+                OutputFilePath = Path.Combine(Path.GetDirectoryName rows.Head.OutputFilePath, "seed11137_phsp21") }
+        for suffix in [ "_pdd"; "_xprofile"; "_yprofile" ] do
+            writeRawDoseCsv (row.OutputFilePath + suffix + ".csv") [ "0", "0", "0", 1.0 ]
+        let scorers = assertOk (discoverCollectScorers [ row ] [ row ])
+        Assert.Equal<string list>([ "pdd"; "xprofile"; "yprofile" ], scorers |> List.map _.Name)
+        for scorer in scorers do
+            let csvPath = scorerRunRows scorer [ row ] |> List.head |> expectedCsvAndLogPaths |> fst
+            Assert.Equal(row.OutputFilePath + "_" + scorer.Name + ".csv", csvPath))

@@ -1,6 +1,8 @@
 module CollectPlanning
 
+open System
 open System.IO
+open FsToolkit.ErrorHandling
 open Shared
 open TsebtConfig
 
@@ -39,6 +41,65 @@ let latestCollectionMarkerPath (settings: TsebtSettings) (seedBase: string) : st
 /// Builds expected csv and log file paths from one generated run row.
 let expectedCsvAndLogPaths (row: CollectRunRow) : string * string =
     row.OutputFilePath + ".csv", row.OutputFilePath + ".log"
+
+/// Represents one discovered scorer suffix and its output folder name.
+type CollectScorer = { Suffix: string; Name: string }
+
+/// Maps an arbitrary scorer suffix to a safe folder name without silently conflating suffixes.
+let private scorerFromSuffix (suffix: string) : Result<CollectScorer, string> =
+    let name =
+        if suffix = "" then "default"
+        elif suffix.StartsWith("_", StringComparison.Ordinal) then suffix.Substring(1)
+        else suffix
+
+    if String.IsNullOrWhiteSpace name || name = "." || name = ".."
+       || name.EndsWith(".", StringComparison.Ordinal) || name.EndsWith(" ", StringComparison.Ordinal)
+       || (name |> Seq.exists (fun c -> Char.IsControl c || "<>:\"/\\|?*".Contains c)) then
+        Error $"Scorer suffix cannot be used as an output folder: '{suffix}'"
+    else
+        Ok { Suffix = suffix; Name = name }
+
+/// Discovers scorer families using the longest matching generated stem to avoid neighbouring run IDs.
+let discoverCollectScorers (allRows: CollectRunRow list) (effectiveRows: CollectRunRow list) : Result<CollectScorer list, string> =
+    try
+        let effectivePaths = effectiveRows |> List.map _.OutputFilePath |> Set.ofList
+        let suffixes =
+            allRows
+            |> List.groupBy (fun row -> Path.GetDirectoryName(Path.GetFullPath row.OutputFilePath))
+            |> List.collect (fun (folder, folderRows) ->
+                let owners = folderRows |> List.sortByDescending (fun row -> Path.GetFileName(row.OutputFilePath).Length)
+                if not (Directory.Exists folder) then []
+                else
+                    Directory.EnumerateFiles(folder)
+                    |> Seq.filter (fun path -> String.Equals(Path.GetExtension path, ".csv", StringComparison.Ordinal))
+                    |> Seq.choose (fun path ->
+                        let stem = Path.GetFileNameWithoutExtension path
+                        owners
+                        |> List.tryFind (fun row -> stem.StartsWith(Path.GetFileName row.OutputFilePath, StringComparison.Ordinal))
+                        |> Option.filter (fun row -> effectivePaths.Contains row.OutputFilePath)
+                        |> Option.map (fun row -> stem.Substring(Path.GetFileName(row.OutputFilePath).Length)))
+                    |> Seq.toList)
+            |> List.distinct
+            |> List.sort
+
+        result {
+            // Retain missing-file diagnostics when no CSV has been produced yet.
+            let! scorers = (if suffixes.IsEmpty then [ "" ] else suffixes) |> List.traverseResultM scorerFromSuffix
+            let collisions = scorers |> List.groupBy (fun scorer -> scorer.Name.ToUpperInvariant()) |> List.filter (fun (_, items) -> items.Length > 1)
+            if not collisions.IsEmpty then
+                return! Error "Different scorer suffixes resolve to the same output folder. Rename the conflicting suffixes before collection."
+            return scorers
+        }
+    with ex ->
+        Error $"Failed discovering scorer CSV files: {ex.Message}"
+
+/// Appends one scorer suffix while retaining the original generated run identity.
+let scorerRunRows (scorer: CollectScorer) (rows: CollectRunRow list) : CollectRunRow list =
+    rows |> List.map (fun row -> { row with OutputFilePath = row.OutputFilePath + scorer.Suffix })
+
+/// Resolves one scorer output folder within a collection attempt.
+let scorerOutputFolderPath (collectionFolder: string) (scorer: CollectScorer) : string =
+    Path.Combine(collectionFolder, scorer.Name)
 
 /// Returns distinct phase-space indexes in stable ascending order.
 let collectPhaseSpaceIndexes (rows: CollectRunRow list) : string list =
@@ -93,3 +154,4 @@ let failedCheck (name: string) (message: string) : CollectPreflightCheck =
 
 /// Builds a successful check with no message.
 let passedCheck (name: string) : CollectPreflightCheck = { Name = name; Ok = true; Message = None }
+

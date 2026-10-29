@@ -86,7 +86,10 @@ srun --nodes=1 --ntasks=1 --nodelist="$NODE_NAME" "$TOPAS" "$INPUT_FILE" > "$LOG
 
 ## Collect summary
 
-- Preflight checks expected CSV/log files for a selected `seedBase`.
+- Discover all CSV scorer suffixes from generated output stems without a fixed scorer-name list.
+- Preflight requires the same healthy scorer set for every retained run, with one shared log per run.
+- Each scorer is merged and assigned uncertainty independently; preview and result show every scorer.
+- Suffix-less CSVs are collected into `default/`.
 - Missing CSV blocks collect.
 - Missing log is warning-only in current behavior.
 - Produces:
@@ -94,9 +97,10 @@ srun --nodes=1 --ntasks=1 --nodelist="$NODE_NAME" "$TOPAS" "$INPUT_FILE" > "$LOG
 ```text
 outputs/{seedBase}/latest_collection.txt
 outputs/{seedBase}/{timestamp}/collect_manifest.tsv
-outputs/{seedBase}/{timestamp}/merged-over-nodes/phsp{phaseSpaceIndex}_merged.csv
-outputs/{seedBase}/{timestamp}/merged-over-phsp/dose_merged.csv
-outputs/{seedBase}/{timestamp}/dose_with_uncertainty.csv
+outputs/{seedBase}/{timestamp}/{scorer}/collect_manifest.tsv
+outputs/{seedBase}/{timestamp}/{scorer}/merged-over-nodes/phsp{phaseSpaceIndex}_merged.csv
+outputs/{seedBase}/{timestamp}/{scorer}/merged-over-phsp/dose_merged.csv
+outputs/{seedBase}/{timestamp}/{scorer}/dose_with_uncertainty.csv
 ```
 
 - Primary final outputs are `merged-over-phsp/dose_merged.csv` and `dose_with_uncertainty.csv`.
@@ -177,3 +181,4 @@ Operations and deployment:
 Testing:
 
 - `docs/test-coverage.md`
+
