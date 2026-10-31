@@ -87,6 +87,54 @@ let ``Input geometry resolves current scorers and detects incompatible grids`` (
     Assert.True(Result.isError(AnalysisInput.mappingFromText "pdd" 2 20 text))
     Assert.True(Result.isError(AnalysisInput.mappingFromText "pdd" 2 25 (text+"\nd:Ge/WaterTank/RotY = 10 deg\n")))
 
+/// Checks unsuffixed scorers are resolved by exact manifest CSV path without choosing ambiguous outputs.
+[<Fact>]
+let ``Manifest source path resolves an unsuffixed PDD scorer`` () =
+    let text=System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__,"Fixtures","generated-input-1113.txt"))
+    let unsuffixed=text.Replace("seed11137_phsp21_pdd", "seed11137_phsp21")
+    let path="/srv/cluster/tsebt/runs/1113/seed11137_phsp21.csv"
+    let mapping=assertOk(AnalysisInput.mappingFromCsvPath path 2 25 unsuffixed)
+    Assert.Equal("PDD",mapping.Role)
+    Assert.Equal(1.,mapping.OriginMm)
+    Assert.True(Result.isError(AnalysisInput.mappingFromCsvPath "/other/run.csv" 2 25 unsuffixed))
+    let ambiguous=unsuffixed+"\ns:Sc/Duplicate/OutputFile = \"/srv/cluster/tsebt/runs/1113/seed11137_phsp21\"\n"
+    Assert.True(Result.isError(AnalysisInput.mappingFromCsvPath path 2 25 ambiguous))
+
+/// Checks default dose and dedicated profiles remain separate when repairing an incorrect saved role.
+[<Fact>]
+let ``Default collection restores PDD while dedicated Y profile stays correct`` () =
+    let folder=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"analysis-default-"+System.Guid.NewGuid().ToString("N"))
+    try
+        let settings=buildSettings folder
+        let output=System.IO.Path.Combine(folder,"outputs","1113","20261031T205451")
+        let inputs=System.IO.Path.Combine(folder,"inputs","1113")
+        System.IO.Directory.CreateDirectory inputs |> ignore
+        let fixture=System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__,"Fixtures","generated-input-1113.txt"))
+        System.IO.File.WriteAllText(System.IO.Path.Combine(inputs,"seed11137_phsp21.txt"),fixture.Replace("seed11137_phsp21_pdd","seed11137_phsp21"))
+        let stem="/srv/cluster/tsebt/runs/1113/seed11137_phsp21"
+        for scorer,source,count in ["default",stem,25;"yprofile",stem+"_yprofile",300] do
+            let destination=System.IO.Path.Combine(output,scorer)
+            System.IO.Directory.CreateDirectory destination |> ignore
+            System.IO.File.WriteAllText(System.IO.Path.Combine(destination,"collect_manifest.tsv"),$"scorer\trunId\tcsvPath\n{scorer}\tseed11137_phsp21\t{source}.csv\n")
+            System.IO.File.WriteAllLines(System.IO.Path.Combine(destination,"dose_with_uncertainty.csv"),[
+                yield "x,y,z,dose_to_medium_Gy,standard_uncertainty_Gy"
+                for index in 0..count-1 do
+                    yield if scorer="default" then $"0,0,{index},1,0.01" else $"0,{index},0,1,0.01"])
+        let defaultId="1113/20261031T205451/default/dose_with_uncertainty.csv"
+        let loaded=assertOk(AnalysisOperation.loadCurve settings defaultId)
+        Assert.Equal("PDD",loaded.Mapping.Value.Role)
+        assertOk(AnalysisOperation.saveMapping settings {Id=defaultId;Mapping={loaded.Mapping.Value with Role="Y profile";OriginMm = -299.}}) |> ignore
+        let restored=assertOk(AnalysisOperation.resetMapping settings defaultId)
+        Assert.Equal("PDD",restored.Mapping.Value.Role)
+        Assert.Equal(1.,restored.Mapping.Value.OriginMm)
+        Assert.Equal(25,restored.Points.Length)
+        let profile=assertOk(AnalysisOperation.loadCurve settings "1113/20261031T205451/yprofile/dose_with_uncertainty.csv")
+        Assert.Equal("Y profile",profile.Mapping.Value.Role)
+        Assert.Equal(-299.,profile.Mapping.Value.OriginMm)
+        Assert.Equal(300,profile.Points.Length)
+    finally
+        if System.IO.Directory.Exists folder then System.IO.Directory.Delete(folder,true)
+
 /// Checks server discovery, automatic input lookup, explicit overrides and path isolation together.
 [<Fact>]
 let ``Analysis loads collected dose and resolves matching batch inputs`` () =

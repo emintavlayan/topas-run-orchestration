@@ -12,8 +12,8 @@ let private parameters (text:string) =
     Regex.Matches(text, @"(?m)^\s*[a-z]+:([^=\s]+)\s*=\s*([^#\r\n]+)")
     |> Seq.cast<Match> |> Seq.map(fun m -> m.Groups[1].Value,m.Groups[2].Value.Trim().Trim('"')) |> Map.ofSeq
 
-/// Resolves unrotated scorer dimensions and placement from one generated input.
-let mappingFromText suffix axis count text : Result<AnalysisMapping,string> =
+/// Resolves unrotated geometry for exactly one scorer selected by its output path.
+let private mappingFromMatcher matchesOutput axis count text : Result<AnalysisMapping,string> =
     try
         let values=parameters text
         /// Retrieves a required TOPAS parameter.
@@ -32,8 +32,7 @@ let mappingFromText suffix axis count text : Result<AnalysisMapping,string> =
         /// Uses zero for omitted displacement and rotation parameters.
         let optional key=if values.ContainsKey key then number key else 0.
         let scorers=values |> Map.toList |> List.choose(fun (key,value)->
-            if key.StartsWith("Sc/") && key.EndsWith("/OutputFile") &&
-               suffix<>"default" && value.EndsWith("_"+suffix,StringComparison.Ordinal)
+            if key.StartsWith("Sc/") && key.EndsWith("/OutputFile") && matchesOutput value
             then Some(key.Substring(0,key.Length-"OutputFile".Length)) else None)
         if scorers.Length<>1 then failwith "Cannot uniquely match this collected scorer to an input OutputFile."
         let scorer=scorers.Head
@@ -75,6 +74,17 @@ let mappingFromText suffix axis count text : Result<AnalysisMapping,string> =
         Ok {Role=role;Axis=axis;StepMm=step;OriginMm=origin;CaxMm=0.;Confirmed=true}
     with ex -> Error ex.Message
 
+/// Resolves a suffixed scorer for historical manifests without source CSV paths.
+let mappingFromText suffix axis count text =
+    mappingFromMatcher (fun value -> suffix<>"default" && value.EndsWith("_"+suffix,StringComparison.Ordinal)) axis count text
+
+/// Resolves the input scorer whose output corresponds exactly to a manifest source CSV.
+let mappingFromCsvPath (csvPath:string) axis count text =
+    /// Normalizes path separators without changing case-sensitive file identities.
+    let normalize (path:string) = path.Replace('\\','/')
+    let expected = normalize csvPath
+    mappingFromMatcher (fun value -> normalize(value+".csv")=expected) axis count text
+
 /// Derives a mapping from the inputs of all contributing retained runs and checks agreement.
 let infer (settings:TsebtSettings) (id:string) axis count =
     try
@@ -87,18 +97,30 @@ let infer (settings:TsebtSettings) (id:string) axis count =
         if not(File.Exists manifest) then Error "No scorer manifest; use explicit mapping for historical outputs."
         else
             let rows=File.ReadAllLines manifest
-            let runColumn=rows[0].Split('\t') |> Array.findIndex ((=) "runId")
-            let runIds=rows |> Array.skip 1 |> Array.filter(String.IsNullOrWhiteSpace >> not) |> Array.map(fun line->line.Split('\t')[runColumn]) |> Array.distinct
-            let results=runIds |> Array.map(fun runId ->
+            let headers=rows[0].Split('\t')
+            let runColumn=headers |> Array.findIndex ((=) "runId")
+            let csvColumn=headers |> Array.tryFindIndex ((=) "csvPath")
+            let scorerColumn=headers |> Array.tryFindIndex ((=) "scorer")
+            let contributors=
+                rows |> Array.skip 1 |> Array.filter(String.IsNullOrWhiteSpace >> not)
+                |> Array.map(fun line -> line.Split('\t'))
+                |> Array.filter(fun fields -> scorerColumn |> Option.forall (fun column -> String.Equals(fields[column],suffix,StringComparison.OrdinalIgnoreCase)))
+                |> Array.map(fun fields -> fields[runColumn],csvColumn |> Option.map(fun column -> fields[column]))
+                |> Array.distinct
+            if contributors.Length=0 then failwith $"No manifest contributors for scorer {suffix}."
+            let results=contributors |> Array.map(fun (runId,csvPath) ->
                 let path=Path.Combine(settings.AppRoot,settings.Paths.Inputs,batch,runId+".txt")
                 if not(File.Exists path) then Error $"Generated input missing: {path}"
                 else
-                    mappingFromText suffix axis count (File.ReadAllText path)
+                    let text=File.ReadAllText path
+                    (match csvPath with
+                     | Some source -> mappingFromCsvPath source axis count text
+                     | None -> mappingFromText suffix axis count text)
                     |> Result.mapError (fun reason -> $"{runId}.txt: {reason}"))
             match results |> Array.tryPick(function Error e->Some e | _ ->None) with
             | Some message -> Error message
             | None ->
                 let mappings=results |> Array.choose(function Ok m->Some m | _ ->None) |> Array.distinct
                 if mappings.Length<>1 then Error "Contributing inputs have inconsistent scorer geometries."
-                else Ok(mappings[0],$"Derived from inputs/{batch}: {runIds.Length} contributing generated inputs agree; scorer {suffix}.")
+                else Ok(mappings[0],$"Derived from inputs/{batch}: {contributors.Length} contributing generated inputs agree; scorer {suffix}.")
     with ex -> Error $"Cannot derive input geometry: {ex.Message}"

@@ -68,6 +68,11 @@ let private physical selected =
 /// Extracts the run identifier from a collected output path.
 let private label (dataset: AnalysisDataset) = dataset.Id.Split('/').[0]
 
+/// Identifies the run and scorer when reporting an individual dataset failure.
+let private scorerLabel (dataset: AnalysisDataset) =
+    let parts = dataset.Id.Split('/')
+    if parts.Length>=3 then parts.[0]+"/"+parts.[parts.Length-2] else dataset.Label
+
 /// Extracts a collection timestamp while supporting historical unversioned outputs.
 let private collection (dataset: AnalysisDataset) =
     let parts = dataset.Id.Split('/')
@@ -319,9 +324,12 @@ let View () =
             if error<>"" then Html.div [prop.className "alert alert-error text-sm"; prop.custom ("role","alert"); prop.text error]
             for s,result in prepared do
                 match result with
-                | Error message when s.Mapping.Confirmed -> Html.p [prop.className "text-error text-sm"; prop.text $"{label s.Curve.Dataset} · {s.Mapping.Role}: {message}"]
+                | Error message when s.Mapping.Confirmed ->
+                    Html.button [prop.className "analysis-notice text-error"; prop.title s.Curve.Dataset.Id
+                                 prop.text $"{scorerLabel s.Curve.Dataset} · {s.Mapping.Role} omitted: {message}"
+                                 prop.onClick (fun _ -> setActiveTab "Settings")]
                 | Error _ ->
-                    Html.button [prop.className "analysis-notice"; prop.text $"{label s.Curve.Dataset} · {s.Mapping.Role}: Geometry unavailable · Settings"
+                    Html.button [prop.className "analysis-notice"; prop.title s.Curve.Dataset.Id; prop.text $"{scorerLabel s.Curve.Dataset} · {s.Mapping.Role}: Geometry unavailable · Settings"
                                  prop.onClick (fun _ -> setActiveTab "Settings")]
                 | _ -> Html.none
             if activeTab="Profiles" then
@@ -383,7 +391,7 @@ let View () =
                             let source = s.Curve.MappingSource.Replace("Unconfirmed editable preset. Input detection: ", "")
                             Html.details [prop.className "analysis-mapping"; prop.children [
                                 Html.summary [prop.children [
-                                    Html.span $"{label s.Curve.Dataset} · {s.Mapping.Role}"
+                                    Html.span $"{scorerLabel s.Curve.Dataset} · {s.Mapping.Role}"
                                     Html.span [prop.className "text-base-content/50"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "From inputs" else "Override")]]]
                                 Html.div [prop.className "space-y-3 pt-3"; prop.children [
                                     Html.p [prop.className "text-xs break-words text-base-content/60"; prop.text source]

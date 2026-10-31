@@ -25,7 +25,7 @@ Analyse reads collected results directly from the server.
 
 Central mean defaults to 10 samples. For the current centred 2 mm profile grid, these are −9, −7, …, +9 mm, matching the earlier mean within ±1 cm. Five points selects the nearest five samples. Equal-distance ties use the lower position. The requested count must exist and include samples on both sides of CAX; CAX must lie within the sampled profile. There is no fallback to fewer samples or another normalization.
 
-If CAX lies outside a profile, the error includes the mapped minimum and maximum. Settings shows the source mapping, stored coordinate range, spacing and origin. For the standard 300-bin profile, bin coordinates 0–299 should map to −299.0…+299.0 mm. A new collection folder alone does not prove the selected mapping is correct.
+If CAX lies outside a profile, the error identifies the run/scorer and includes the mapped minimum and maximum. That scorer is omitted; other valid scorers from the same run can remain visible. Click the error to open Settings. Settings shows the source mapping, stored coordinate range, spacing and origin. For the standard 300-bin profile, bin coordinates 0–299 should map to −299.0…+299.0 mm. A new collection folder alone does not prove the selected mapping is correct.
 
 The normalization modes, central count and equation choices are saved in this browser. A missing or non-positive reference produces an inline error. No extrapolation is used. Normalization removes amplitude differences; use **None** with consistent source histories/weights when comparing raw doses. Gy is not automatically Gy/MU.
 
@@ -66,3 +66,5 @@ R50 is dose-based, not an I50 conversion. No smoothing or peak fitting is applie
 Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export Curves includes role, normalization, central sample count and CAX; Export Metrics includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
 
 Supported now: collected 1D scorers, generated-input geometry inference, explicit overrides, overlays, differences, metrics and CSV export. Multidimensional scorers require explicit extraction. Measured-data import, 3D slicing, gamma and derived-metric uncertainty propagation remain future work.
+
+For an incorrectly saved `default` mapping, choose **Settings → Geometry → run/default → Use inputs**. Current manifests identify the input scorer by its exact source CSV path, including unsuffixed outputs. Restoring inputs fails explicitly if no unique input scorer matches; the program does not infer a role solely from sample count.
