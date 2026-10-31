@@ -113,7 +113,7 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
 
 /// Renders the compact Analyse workspace with dedicated settings and geometry editors.
 [<ReactComponent>]
-let view () =
+let View () =
     let api = React.useMemo((fun () -> Api.makeProxy<ITopasApi>()), [||])
     let datasets,setDatasets = React.useState<AnalysisDataset list>([])
     let selected,setSelected = React.useStateWithUpdater<Selection list>([])
@@ -284,12 +284,14 @@ let view () =
                                         prop.custom ("aria-label","Include run "+runId); prop.isChecked active
                                         prop.onClick (fun event -> event.stopPropagation())
                                         prop.onChange (fun (_:bool) -> toggleRun runId)]
+                            Html.span [prop.className "analysis-dot"; prop.style [style.backgroundColor (AnalysisPlot.color runId)]]
                             Html.span runId]]
                         Html.div [prop.className "analysis-collection-list"; prop.children [
                             for index,(key,_) in List.indexed available do
+                                let isCurrent = current = Some key
                                 Html.label [prop.className "analysis-collection"; prop.children [
                                     Html.input [prop.type' "radio"; prop.name ("collection-"+runId); prop.className "radio radio-xs"
-                                                prop.disabled busy; prop.isChecked (current=Some key)
+                                                prop.disabled busy; prop.isChecked isCurrent
                                                 prop.onChange (fun (_:bool) -> if not busy then loadRun runId key)]
                                     Html.span (if key="" then "Historical" else key)
                                     if index=0 then Html.span [prop.className "text-base-content/50 text-xs"; prop.text "Latest"]]]]]]]]]
@@ -325,8 +327,9 @@ let view () =
                 elif customBounds && xmin>=xmax then
                     Html.div [prop.className "analysis-empty"; prop.text "Plot minimum must be below maximum. Change bounds in Settings."]
                 else
+                    let plotContext = String.concat "|" [normalization;format normPosition;reference;string customBounds;format xmin;format xmax]
                     AnalysisPlot.view (if useDifference then "Reference difference" else roleFilter)
-                        (if roleFilter="PDD" then "Depth [mm]" else "Position [mm]") unitName
+                        plotContext (if roleFilter="PDD" then "Depth [mm]" else "Position [mm]") unitName
                         (bands && not useDifference) samples (plateau && not raw && not useDifference) plotted
                 if useDifference then
                     match referenceCurve with

@@ -73,17 +73,8 @@ body {
 .analysis-tab.active { color: oklch(var(--p)); border-bottom-color: oklch(var(--p)); }
 .analysis-tab:focus-visible { outline: 2px solid oklch(var(--p)); outline-offset: 3px; }
 .analysis-plot-toolbar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; padding: 1rem 1rem 0; }
-.analysis-plot { padding: 0.25rem 0.5rem 1rem; }
-.analysis-plot svg { width: 100%; height: auto; display: block; }
-.analysis-grid { stroke: currentColor; stroke-opacity: 0.10; stroke-width: 1; }
-.analysis-zero { stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1; }
-.analysis-axis { stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1; }
-.analysis-tick { fill: currentColor; fill-opacity: 0.65; font-size: 12px; }
-.analysis-axis-title { fill: currentColor; fill-opacity: 0.75; font-size: 13px; }
-.analysis-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1.25rem; padding: 0 1rem; font-size: 0.7rem; }
-.analysis-legend-item { display: inline-flex; align-items: center; gap: 0.4rem; overflow-wrap: anywhere; }
-.analysis-swatch { width: 1.25rem; border-top: 2px solid; flex-shrink: 0; }
-.analysis-swatch.dashed { border-top-style: dashed; }
+.analysis-plot { min-width: 0; padding: 0 0.5rem 0.5rem; }
+.analysis-plot-canvas { width: 100%; height: clamp(320px, 58vh, 640px); }
 .analysis-empty { min-height: 24rem; display: flex; align-items: center; justify-content: center; padding: 2rem; color: oklch(var(--bc) / 0.5); text-align: center; }
 .analysis-notice { display: block; margin: 0.75rem 1rem; text-align: left; font-size: 0.75rem; color: oklch(var(--bc)); border-left: 2px solid oklch(var(--wa)); padding: 0.35rem 0.75rem; }
 .analysis-main > .text-error, .analysis-main > .alert { margin: 0.75rem 1rem; }
@@ -106,6 +97,5 @@ body {
 @media (max-width: 1050px) { .analysis-settings { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
     .analysis-empty { min-height: 14rem; }
-    .analysis-plot { overflow-x: auto; }
-    .analysis-plot svg { min-width: 580px; }
+    .analysis-plot { padding: 0 0 0.25rem; }
 }

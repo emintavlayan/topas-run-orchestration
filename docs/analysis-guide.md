@@ -6,7 +6,7 @@ Analyse reads collected results directly from the server.
 
 ## A first comparison
 
-1. Open **Analyse**. Select run IDs in the compact run bar. Expand a run (for example **1114**) to see all collection folders, newest first; the latest is selected by default. Use **Refresh** to discover new collections.
+1. Open **Analyse**. Select run IDs in the compact run bar. Each run's colour identifies its curve; there is no separate plot legend. Expand a run (for example **1114**) to see all collection folders, newest first; the latest is selected by default. Use **Refresh** to discover new collections.
 2. Use **X**, **Y** or **PDD** in **Profiles** to compare the selected runs. Choosing a run loads every scorer from one collection together; changing the collection replaces that run’s curves. Collections are never mixed automatically.
 3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; enter a manual override and **Save override** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
@@ -45,9 +45,11 @@ These names identify equations. They do not select a complete vendor acceptance 
 
 ## Plot and results
 
+The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing runs, collections, X/Y/PDD, normalization, reference, bounds or the plateau preset resets the view. Run colours in the selector identify curves; no bottom legend is shown.
+
 **Settings → Plot** controls uncertainty bands, sample markers, horizontal bounds and the reference run. The X/Y/PDD buttons select the matching reference scorer automatically. Choosing a reference enables the **Difference** view for curves with the same role; switch it off in the plot toolbar to return to overlays. Differences use only overlapping coordinates and are in Gy or percentage points. **95–105%** expands the relative-dose plateau vertically.
 
-Metrics always use the complete curve. Plot bounds do not limit metrics or exports. Metrics, axis labels and hover values display one decimal place; small nonzero doses use scientific notation. CSV exports retain six significant digits. Missing values appear as **—**.
+Metrics always use the complete curve. Plot bounds and interactive zoom do not limit metrics or exports. Metrics, axis labels and hover values display one decimal place; raw-dose plots below 0.1 Gy use scientific notation. CSV exports retain six significant digits. Missing values appear as **—**.
 
 | Result | Definition |
 |---|---|

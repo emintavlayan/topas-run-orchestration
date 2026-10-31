@@ -1,102 +1,100 @@
 module AnalysisPlot
 
 open System
+open Fable.Core
+open Fable.Core.JsInterop
 open Feliz
 open Shared
 
 /// Represents a displayed curve with stable identity and line styling.
 type Curve = { Id: string; Label: string; Role: string; Points: AnalysisPoint list }
 
-/// Formats compact axis labels without changing exported precision.
-let private number (value: float) = value.ToString("G4", Globalization.CultureInfo.InvariantCulture)
+/// Imports the React component that manages the Plotly chart lifecycle.
+[<Import("default", "./AnalysisChart.jsx")>]
+let private chartComponent: obj = jsNative
 
-/// Formats visible values to one decimal place with scientific notation for small doses.
-let private displayNumber (value: float) =
-    let precision = if value<>0.0 && abs value<0.1 then "E1" else "F1"
-    value.ToString(precision, Globalization.CultureInfo.InvariantCulture)
+/// Creates a React element without calling a hooked component as a function.
+[<Import("createElement", "react")>]
+let private createElement (component: obj, props: obj): Fable.React.ReactElement = jsNative
 
 /// Assigns a stable colour to each run across scorers and collection changes.
 let color (id: string) =
-    let parts = id.Split('/')
-    let key = parts.[0]
+    let key = id.Split('/').[0]
     let index = key |> Seq.fold (fun total c -> (total*31+int c)%8) 0
     let palette = [|"#2563eb"; "#e05a36"; "#009e73"; "#a855f7"; "#d18a00"; "#0891b2"; "#db2777"; "#64748b"|]
     palette.[index]
 
-/// Chooses a readable major grid spacing for the current data interval.
-let private tickStep span =
-    let raw = max 1e-12 span / 6.0
-    let magnitude = 10.0 ** floor (log10 raw)
-    let fraction = raw/magnitude
-    (if fraction <= 1.0 then 1.0 elif fraction <= 2.0 then 2.0 elif fraction <= 5.0 then 5.0 else 10.0)*magnitude
+/// Converts a run colour to a translucent uncertainty fill.
+let private fillColor (hex: string) =
+    let red = Convert.ToInt32(hex.Substring(1,2),16)
+    let green = Convert.ToInt32(hex.Substring(3,2),16)
+    let blue = Convert.ToInt32(hex.Substring(5,2),16)
+    $"rgba({red},{green},{blue},0.10)"
 
-/// Enumerates labelled major grid positions within an axis range.
-let private ticks minimum maximum =
-    let step = tickStep (maximum-minimum)
-    let start = ceil (minimum/step)*step
-    [for i in 0..int (floor ((maximum-start)/step)) -> start+float i*step]
+/// Builds paired uncertainty boundaries followed by the dose trace.
+let private traces bands samples valueFormat (curve: Curve) =
+    let positions = curve.Points |> List.map _.Position |> List.toArray
+    let stroke = color curve.Id
+    [|
+        if bands then
+            for direction in [-1.0;1.0] do
+                yield createObj [
+                    "type" ==> "scatter"; "mode" ==> "lines"
+                    "x" ==> positions
+                    "y" ==> (curve.Points |> List.map (fun p -> p.Dose+direction*p.Uncertainty) |> List.toArray)
+                    "line" ==> createObj ["width" ==> 0]
+                    "fill" ==> (if direction>0.0 then "tonexty" else "none")
+                    "fillcolor" ==> fillColor stroke
+                    "hoverinfo" ==> "skip"; "showlegend" ==> false]
+        yield createObj [
+            "type" ==> "scatter"; "mode" ==> (if samples then "lines+markers" else "lines")
+            "uid" ==> curve.Id; "name" ==> (curve.Label+" · "+curve.Role)
+            "x" ==> positions; "y" ==> (curve.Points |> List.map _.Dose |> List.toArray)
+            "line" ==> createObj ["color" ==> stroke; "width" ==> 2.2; "dash" ==> (if curve.Role="Y profile" then "dash" else "solid")]
+            "marker" ==> createObj ["color" ==> stroke; "size" ==> 5]
+            "hovertemplate" ==> ("%{x:.1f} mm · %{y:"+valueFormat+"}<extra>%{fullData.name}</extra>")
+            "showlegend" ==> false]
+    |]
 
-/// Renders one responsive overlay with a compact legend and sample tooltips.
-let view (title: string) (xTitle: string) (unitName: string) bands samples plateau (curves: Curve list) =
+/// Builds a labelled axis with one-decimal ticks and a visible zero line.
+let private axis title valueFormat =
+    createObj [
+        "title" ==> createObj ["text" ==> title; "standoff" ==> 12]
+        "tickformat" ==> valueFormat; "hoverformat" ==> valueFormat
+        "automargin" ==> true; "gridcolor" ==> "rgba(128,128,128,0.15)"
+        "zerolinecolor" ==> "rgba(128,128,128,0.45)"; "zerolinewidth" ==> 1]
+
+/// Renders an interactive Plotly overlay with the run selector as its legend.
+let view (title: string) (context: string) (xTitle: string) (unitName: string) bands samples plateau (curves: Curve list) =
     let points = curves |> List.collect _.Points
     if points.IsEmpty then
         Html.div [prop.className "analysis-empty"; prop.text "No curves in this view."]
     else
-        let minimumX = points |> List.minBy _.Position |> _.Position
-        let maximumX = points |> List.maxBy _.Position |> _.Position
-        let xmin, xmax = if minimumX=maximumX then minimumX-1.0, maximumX+1.0 else minimumX, maximumX
         let lower = points |> List.map (fun p -> p.Dose-(if bands then p.Uncertainty else 0.0)) |> List.min
         let upper = points |> List.map (fun p -> p.Dose+(if bands then p.Uncertainty else 0.0)) |> List.max
-        let ymin, ymax =
-            if plateau then 95.0, 105.0
-            else
-                let bottom = min 0.0 lower
-                bottom, max (bottom+1e-12) (upper+0.05*max 1e-12 (upper-bottom))
-        /// Maps a physical abscissa to the chart viewport.
-        let x value = 76.0+(value-xmin)/(xmax-xmin)*884.0
-        /// Maps a dose ordinate to the chart viewport.
-        let y value = 450.0-(value-ymin)/(ymax-ymin)*420.0
-        /// Formats polyline vertices in SVG coordinate syntax.
-        let vertices values = values |> List.map (fun (a,b) -> $"{number a},{number b}") |> String.concat " "
-        Html.div [prop.className "analysis-plot"; prop.children [
-            Svg.svg [svg.viewBox (0,0,1000,510); svg.custom ("role","img"); svg.custom ("aria-label",title); svg.children [
-                Svg.title title
-                Svg.defs [svg.children [Svg.clipPath [svg.id "analysis-plot-clip"; svg.children [
-                    Svg.rect [svg.x 76; svg.y 30; svg.width 884; svg.height 420]]]]]
-                for value in ticks ymin ymax do
-                    Svg.line [svg.x1 76; svg.x2 960; svg.y1 (y value); svg.y2 (y value); svg.custom ("class","analysis-grid")]
-                    Svg.text [svg.x 64; svg.y (y value+4.0); svg.custom ("text-anchor","end"); svg.custom ("class","analysis-tick"); svg.text (displayNumber value)]
-                for value in ticks xmin xmax do
-                    Svg.line [svg.x1 (x value); svg.x2 (x value); svg.y1 30; svg.y2 450; svg.custom ("class","analysis-grid")]
-                    Svg.text [svg.x (x value); svg.y 474; svg.custom ("text-anchor","middle"); svg.custom ("class","analysis-tick"); svg.text (displayNumber value)]
-                if xmin < 0.0 && xmax > 0.0 then
-                    Svg.line [svg.x1 (x 0.0); svg.x2 (x 0.0); svg.y1 30; svg.y2 450; svg.custom ("class","analysis-zero")]
-                Svg.line [svg.x1 76; svg.x2 960; svg.y1 450; svg.y2 450; svg.custom ("class","analysis-axis")]
-                Svg.line [svg.x1 76; svg.x2 76; svg.y1 30; svg.y2 450; svg.custom ("class","analysis-axis")]
-                Svg.text [svg.x 518; svg.y 502; svg.custom ("text-anchor","middle"); svg.custom ("class","analysis-axis-title"); svg.text xTitle]
-                Svg.text [svg.x 18; svg.y 240; svg.custom ("transform","rotate(-90 18 240)"); svg.custom ("text-anchor","middle"); svg.custom ("class","analysis-axis-title"); svg.text unitName]
-                Svg.g [svg.custom ("clip-path","url(#analysis-plot-clip)"); svg.children [
-                    for curve in curves do
-                        let stroke = color curve.Id
-                        if bands then
-                            let outline =
-                                (curve.Points |> List.map (fun p -> x p.Position, y (p.Dose+p.Uncertainty))) @
-                                (curve.Points |> List.rev |> List.map (fun p -> x p.Position, y (p.Dose-p.Uncertainty)))
-                            Svg.polygon [svg.points (vertices outline); svg.fill stroke; svg.fillOpacity 0.10]
-                        Svg.polyline [svg.points (curve.Points |> List.map (fun p -> x p.Position,y p.Dose) |> vertices)
-                                      svg.fill "none"; svg.stroke stroke; svg.strokeWidth 2.2
-                                      svg.custom ("stroke-dasharray",if curve.Role="Y profile" then "7 5" else "none")]
-                        for p in curve.Points do
-                            Svg.circle [svg.cx (x p.Position); svg.cy (y p.Dose); svg.r (if samples then 2.5 else 4.0)
-                                        svg.fill stroke; svg.fillOpacity (if samples then 0.85 else 0.0)
-                                        svg.children [Svg.title $"{curve.Label} · {curve.Role}\n{displayNumber p.Position} mm · {displayNumber p.Dose} {unitName}"]]
-                ]]
-            ]]
-            Html.div [prop.className "analysis-legend"; prop.children [
-                for curve in curves do
-                    let roleLabel = curve.Role.Replace(" profile", "")
-                    Html.span [prop.title curve.Id; prop.className "analysis-legend-item"; prop.children [
-                        Html.span [prop.className (if curve.Role="Y profile" then "analysis-swatch dashed" else "analysis-swatch")
-                                   prop.style [style.borderColor (color curve.Id)]]
-                        Html.span $"{curve.Label} · {roleLabel}"]]]]
-        ]]
+        let bottom = min 0.0 lower
+        let range = if plateau then [|95.0;105.0|] else [|bottom;max (bottom+1e-12) (upper+0.05*max 1e-12 (upper-bottom))|]
+        let valueFormat = if unitName.Contains("Gy") && max (abs lower) (abs upper)<0.1 then ".1e" else ".1f"
+        let first = points |> List.minBy _.Position |> _.Position
+        let last = points |> List.maxBy _.Position |> _.Position
+        let revision = String.concat "|" [title;context;unitName;string plateau;string first;string last;curves |> List.map _.Id |> String.concat ";"]
+        let layout = createObj [
+            "autosize" ==> true; "showlegend" ==> false; "uirevision" ==> revision
+            "dragmode" ==> "zoom"; "hovermode" ==> "closest"
+            "paper_bgcolor" ==> "rgba(0,0,0,0)"; "plot_bgcolor" ==> "rgba(0,0,0,0)"
+            "font" ==> createObj ["family" ==> "system-ui, sans-serif"; "size" ==> 12]
+            "margin" ==> createObj ["l" ==> 72; "r" ==> 20; "t" ==> 40; "b" ==> 60]
+            "xaxis" ==> axis xTitle ".1f"
+            "yaxis" ==> createObj [
+                "title" ==> createObj ["text" ==> unitName; "standoff" ==> 12]
+                "tickformat" ==> valueFormat; "hoverformat" ==> valueFormat
+                "automargin" ==> true; "range" ==> range; "autorange" ==> false
+                "gridcolor" ==> "rgba(128,128,128,0.15)"; "zerolinecolor" ==> "rgba(128,128,128,0.45)"]]
+        let config = createObj [
+            "responsive" ==> true; "scrollZoom" ==> true; "displaylogo" ==> false
+            "displayModeBar" ==> true; "doubleClick" ==> "reset"
+            "modeBarButtonsToRemove" ==> [|"select2d";"lasso2d"|]
+            "toImageButtonOptions" ==> createObj ["format" ==> "png"; "filename" ==> ("topas-"+title); "scale" ==> 2]]
+        createElement (chartComponent, createObj [
+            "title" ==> title; "data" ==> (curves |> List.toArray |> Array.collect (traces bands samples valueFormat))
+            "layout" ==> layout; "config" ==> config])

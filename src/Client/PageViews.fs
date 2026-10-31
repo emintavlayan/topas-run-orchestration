@@ -129,7 +129,7 @@ let viewPageContent (model: Model) (dispatch: Msg -> unit) =
 
         viewRunPage appRoot model.Run dispatch
     | Collect -> viewCollectPage model.Collect dispatch
-    | Analyse -> AnalysisViews.view ()
+    | Analyse -> AnalysisViews.View ()
 
 /// Renders the client landing page and selected content.
 let view (model: Model) (dispatch: Msg -> unit) =
