@@ -10,10 +10,15 @@ type Curve = { Id: string; Label: string; Role: string; Points: AnalysisPoint li
 /// Formats compact axis labels without changing exported precision.
 let private number (value: float) = value.ToString("G4", Globalization.CultureInfo.InvariantCulture)
 
-/// Assigns the same colour to scorers from the same collection.
+/// Formats visible values to one decimal place with scientific notation for small doses.
+let private displayNumber (value: float) =
+    let precision = if value<>0.0 && abs value<0.1 then "E1" else "F1"
+    value.ToString(precision, Globalization.CultureInfo.InvariantCulture)
+
+/// Assigns a stable colour to each run across scorers and collection changes.
 let color (id: string) =
     let parts = id.Split('/')
-    let key = parts |> Array.truncate 2 |> String.concat "/"
+    let key = parts.[0]
     let index = key |> Seq.fold (fun total c -> (total*31+int c)%8) 0
     let palette = [|"#2563eb"; "#e05a36"; "#009e73"; "#a855f7"; "#d18a00"; "#0891b2"; "#db2777"; "#64748b"|]
     palette.[index]
@@ -60,10 +65,10 @@ let view (title: string) (xTitle: string) (unitName: string) bands samples plate
                     Svg.rect [svg.x 76; svg.y 30; svg.width 884; svg.height 420]]]]]
                 for value in ticks ymin ymax do
                     Svg.line [svg.x1 76; svg.x2 960; svg.y1 (y value); svg.y2 (y value); svg.custom ("class","analysis-grid")]
-                    Svg.text [svg.x 64; svg.y (y value+4.0); svg.custom ("text-anchor","end"); svg.custom ("class","analysis-tick"); svg.text (number value)]
+                    Svg.text [svg.x 64; svg.y (y value+4.0); svg.custom ("text-anchor","end"); svg.custom ("class","analysis-tick"); svg.text (displayNumber value)]
                 for value in ticks xmin xmax do
                     Svg.line [svg.x1 (x value); svg.x2 (x value); svg.y1 30; svg.y2 450; svg.custom ("class","analysis-grid")]
-                    Svg.text [svg.x (x value); svg.y 474; svg.custom ("text-anchor","middle"); svg.custom ("class","analysis-tick"); svg.text (number value)]
+                    Svg.text [svg.x (x value); svg.y 474; svg.custom ("text-anchor","middle"); svg.custom ("class","analysis-tick"); svg.text (displayNumber value)]
                 if xmin < 0.0 && xmax > 0.0 then
                     Svg.line [svg.x1 (x 0.0); svg.x2 (x 0.0); svg.y1 30; svg.y2 450; svg.custom ("class","analysis-zero")]
                 Svg.line [svg.x1 76; svg.x2 960; svg.y1 450; svg.y2 450; svg.custom ("class","analysis-axis")]
@@ -84,7 +89,7 @@ let view (title: string) (xTitle: string) (unitName: string) bands samples plate
                         for p in curve.Points do
                             Svg.circle [svg.cx (x p.Position); svg.cy (y p.Dose); svg.r (if samples then 2.5 else 4.0)
                                         svg.fill stroke; svg.fillOpacity (if samples then 0.85 else 0.0)
-                                        svg.children [Svg.title $"{curve.Label} · {curve.Role}\n{number p.Position} mm · {number p.Dose} {unitName}"]]
+                                        svg.children [Svg.title $"{curve.Label} · {curve.Role}\n{displayNumber p.Position} mm · {displayNumber p.Dose} {unitName}"]]
                 ]]
             ]]
             Html.div [prop.className "analysis-legend"; prop.children [

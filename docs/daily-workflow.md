@@ -63,11 +63,11 @@ Recollection reads the same raw outputs and creates another timestamp folder. Pr
 ## 4. Analyse and export
 
 1. Open **Analyse** and refresh the available outputs.
-2. Select several collected scorer datasets.
-3. Read each geometry-source message. Supported inputs are resolved automatically from the batch's generated input files.
-4. For unresolved geometry, inspect the proposed mapping, edit it and explicitly confirm/save before interpreting distances.
+2. Select run IDs. Expand a run to choose a collection folder; the latest is the default.
+3. Geometry is used automatically from the batch's archived inputs; its source is available in Settings.
+4. If geometry is unavailable, inspect the reason under **Settings → Geometry** and save a manual override if needed.
 5. In **Settings**, choose profile/PDD normalization, metric equations, evaluation region and an optional reference. Profiles default to a 10-point central mean.
-6. Compare the separate PDD, X and Y plots; export curves or metrics as CSV.
+6. Switch between **X**, **Y** and **PDD**; export curves or metrics as CSV.
 
 **You should see:** overlaid curves, optional uncertainty bands, metrics and a difference plot when the selected reference has a matching role. Hover points for values and use physical plot limits to inspect a region.
 

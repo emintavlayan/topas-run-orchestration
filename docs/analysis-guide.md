@@ -6,9 +6,9 @@ Analyse reads collected results directly from the server.
 
 ## A first comparison
 
-1. Open **Analyse**. Select outputs in the left panel; use **Filter outputs** or **Refresh** as needed.
-2. **Profiles** overlays X/Y in one plot. Use **X**, **Y** or **PDD** to isolate a role. X is solid; Y is dashed. Scorers from one collection share a colour.
-3. Open **Settings → Geometry** if a mapping needs confirmation. Check role, spacing, origin and CAX, then **Confirm and save**. Confirmed geometry is collapsed by default.
+1. Open **Analyse**. Select run IDs in the compact run bar. Expand a run (for example **1114**) to see all collection folders, newest first; the latest is selected by default. Use **Refresh** to discover new collections.
+2. Use **X**, **Y** or **PDD** in **Profiles** to compare the selected runs. Choosing a run loads every scorer from one collection together; changing the collection replaces that run’s curves. Collections are never mixed automatically.
+3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; enter a manual override and **Save override** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
 5. Open **Metrics** for one row per dataset and one column per metric.
 6. Download **Curves CSV** or **Metrics CSV** from the toolbar.
@@ -45,9 +45,9 @@ These names identify equations. They do not select a complete vendor acceptance 
 
 ## Plot and results
 
-**Settings → Plot** controls uncertainty bands, sample markers, horizontal bounds and the difference reference. Choosing a reference enables the **Difference** view for curves with the same role; switch it off in the plot toolbar to return to overlays. Differences use only overlapping coordinates and are in Gy or percentage points. **95–105%** expands the relative-dose plateau vertically.
+**Settings → Plot** controls uncertainty bands, sample markers, horizontal bounds and the reference run. The X/Y/PDD buttons select the matching reference scorer automatically. Choosing a reference enables the **Difference** view for curves with the same role; switch it off in the plot toolbar to return to overlays. Differences use only overlapping coordinates and are in Gy or percentage points. **95–105%** expands the relative-dose plateau vertically.
 
-Metrics always use the complete curve. Plot bounds do not limit metrics or exports. Missing values appear as **—**.
+Metrics always use the complete curve. Plot bounds do not limit metrics or exports. Metrics, axis labels and hover values display one decimal place; small nonzero doses use scientific notation. CSV exports retain six significant digits. Missing values appear as **—**.
 
 | Result | Definition |
 |---|---|

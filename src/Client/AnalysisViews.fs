@@ -65,8 +65,17 @@ let private physical selected =
     |> List.map (fun p -> {p with Position=selected.Mapping.OriginMm+selected.Mapping.StepMm*p.Position})
     |> List.sortBy _.Position
 
-/// Shortens a collected path without losing collection identity.
-let private label (dataset: AnalysisDataset) = dataset.Label.Replace("/", " · ")
+/// Extracts the run identifier from a collected output path.
+let private label (dataset: AnalysisDataset) = dataset.Id.Split('/').[0]
+
+/// Extracts a collection timestamp while supporting historical unversioned outputs.
+let private collection (dataset: AnalysisDataset) =
+    let parts = dataset.Id.Split('/')
+    if parts.Length >= 3 then parts.[1] else ""
+
+/// Groups one run's scorers into complete collection choices, newest first.
+let private collections runId (datasets: AnalysisDataset list) =
+    datasets |> List.filter (fun d -> label d=runId) |> List.groupBy collection |> List.sortByDescending fst
 
 /// Normalizes each role using its own settings and confirmed geometry.
 let private prepare profileMode pddMode count position selected =
@@ -100,7 +109,7 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
                                 Html.span (label s.Curve.Dataset)]]
                             for key,_ in headers do
                                 let value = Map.tryFind key values |> Option.flatten
-                                Html.td [prop.text (value |> Option.map (fun v -> v.ToString("F2", Globalization.CultureInfo.InvariantCulture)) |> Option.defaultValue "—")]]]]]]]]]
+                                Html.td [prop.text (value |> Option.map (fun v -> v.ToString("F1", Globalization.CultureInfo.InvariantCulture)) |> Option.defaultValue "—")]]]]]]]]]
 
 /// Renders the compact Analyse workspace with dedicated settings and geometry editors.
 [<ReactComponent>]
@@ -108,11 +117,13 @@ let view () =
     let api = React.useMemo((fun () -> Api.makeProxy<ITopasApi>()), [||])
     let datasets,setDatasets = React.useState<AnalysisDataset list>([])
     let selected,setSelected = React.useStateWithUpdater<Selection list>([])
+    let selectedRuns,setSelectedRuns = React.useStateWithUpdater<string list>([])
+    let collectionChoices,setCollectionChoices = React.useStateWithUpdater<Map<string,string>>(Map.empty)
+    let drafts,setDrafts = React.useStateWithUpdater<Map<string,AnalysisMapping>>(Map.empty)
     let error,setError = React.useState("")
     let busy,setBusy = React.useState(false)
     let activeTab,setActiveTab = React.useState("Profiles")
-    let roleFilter,setRoleFilter = React.useState("Profiles")
-    let query,setQuery = React.useState("")
+    let roleFilter,setRoleFilter = React.useState("X")
     let profileMode,setProfileMode = React.useState(fun () -> stored "topas.analysis.profileNorm" "Central mean" ["Central mean";"Maximum";"CAX";"At position";"None"])
     let pddMode,setPddMode = React.useState(fun () -> stored "topas.analysis.pddNorm" "Maximum" ["Maximum";"At position";"None"])
     let countText,setCountText = React.useState(fun () -> stored "topas.analysis.centralCount" "10" ["5";"10"])
@@ -146,36 +157,75 @@ let view () =
         let! result = api.listAnalysisDatasets()
         match result with Ok values -> setDatasets values | Error message -> setError message })
     React.useEffectOnce refresh
-    /// Updates a selected mapping and suspends its analysis until saved.
-    let update id change =
-        setSelected (fun values -> values |> List.map (fun s -> if s.Curve.Dataset.Id=id then {s with Mapping=change s.Mapping} else s))
-    /// Removes a curve and any reference to it.
-    let remove id =
-        setSelected (fun values -> values |> List.filter (fun s -> s.Curve.Dataset.Id<>id))
-        if reference=id then
+    let runs = datasets |> List.map label |> List.distinct |> List.sortDescending
+    /// Uses an explicit collection choice or the latest available collection for a run.
+    let currentCollection runId =
+        let available = collections runId datasets
+        match Map.tryFind runId collectionChoices with
+        | Some key when available |> List.exists (fun (id,_) -> id=key) -> Some key
+        | _ -> available |> List.tryHead |> Option.map fst
+    /// Discards manual edits for one run without changing its active geometry.
+    let discardRunDrafts runId =
+        setDrafts (fun values -> values |> Map.filter (fun id _ -> id.Split('/').[0]<>runId))
+    /// Removes a run and its loaded scorers from the comparison.
+    let removeRun runId =
+        setSelectedRuns (fun values -> values |> List.filter ((<>) runId))
+        setSelected (fun values -> values |> List.filter (fun s -> label s.Curve.Dataset<>runId))
+        discardRunDrafts runId
+        if reference=runId then
             setReference ""
             setDifferences false
-    /// Loads a curve or removes an existing selection.
-    let toggle (dataset: AnalysisDataset) =
-        if selected |> List.exists (fun s -> s.Curve.Dataset.Id=dataset.Id) then remove dataset.Id
-        else run (async {
+    /// Loads every scorer from exactly one collection of the selected run.
+    let loadRun runId collectionId = run (async {
+        let outputs = collections runId datasets |> List.tryFind (fun (key,_) -> key=collectionId) |> Option.map snd |> Option.defaultValue []
+        let! results = outputs |> List.map (fun dataset -> async {
             let! result = api.loadAnalysisCurve dataset.Id
+            return dataset,result }) |> Async.Parallel
+        let loaded = results |> Array.choose (fun (_,result) ->
             match result with
-            | Error message -> setError message
+            | Error _ -> None
             | Ok curve ->
                 let mapping = curve.Mapping |> Option.defaultValue {Role="PDD";Axis=2;StepMm=1.0;OriginMm=0.0;CaxMm=0.0;Confirmed=false}
-                if selected.IsEmpty then setRoleFilter (if mapping.Role="PDD" then "PDD" else "Profiles")
-                setSelected (fun values -> values @ [{Curve=curve;Mapping=mapping}]) })
-    /// Saves an explicit mapping after server validation.
-    let saveMapping s = run (async {
-        let mapping = {s.Mapping with Confirmed=true}
-        let! result = api.saveAnalysisMapping {Id=s.Curve.Dataset.Id;Mapping=mapping}
+                Some {Curve=curve;Mapping=mapping}) |> Array.toList
+        setSelected (fun values -> (values |> List.filter (fun s -> label s.Curve.Dataset<>runId)) @ loaded)
+        setSelectedRuns (fun values -> if List.contains runId values then values else values @ [runId])
+        setCollectionChoices (Map.add runId collectionId)
+        discardRunDrafts runId
+        if selectedRuns.IsEmpty then
+            setRoleFilter (if loaded |> List.exists (fun s -> s.Mapping.Role="X profile") then "X"
+                           elif loaded |> List.exists (fun s -> s.Mapping.Role="Y profile") then "Y" else "PDD")
+        let failures = results |> Array.choose (fun (d,result) -> match result with Error message -> Some (d.Label+": "+message) | Ok _ -> None)
+        setError (String.concat "\n" failures) })
+    /// Toggles a run using its current or latest collection.
+    let toggleRun runId =
+        if List.contains runId selectedRuns then removeRun runId
+        else
+            match currentCollection runId with
+            | Some key -> loadRun runId key
+            | None -> setError "No collected outputs for this run."
+    /// Changes a manual draft while keeping the resolved geometry active.
+    let editMapping s change =
+        let id = s.Curve.Dataset.Id
+        setDrafts (fun values ->
+            let current = Map.tryFind id values |> Option.defaultValue s.Mapping
+            Map.add id (change current) values)
+    /// Saves a validated manual override and activates it after the server accepts it.
+    let saveMapping s mapping = run (async {
+        let resolved = {mapping with Confirmed=true}
+        let id = s.Curve.Dataset.Id
+        let! result = api.saveAnalysisMapping {Id=id;Mapping=resolved}
         match result with
-        | Ok () -> update s.Curve.Dataset.Id (fun _ -> mapping)
+        | Ok () ->
+            setSelected (fun values -> values |> List.map (fun item ->
+                if item.Curve.Dataset.Id=id then
+                    {Curve={item.Curve with Mapping=Some resolved;MappingSource="Saved manual override."}; Mapping=resolved}
+                else item))
+            setDrafts (Map.remove id)
         | Error message -> setError message })
     let prepared = selected |> List.map (fun s -> s,prepare profileMode pddMode count normPosition s)
     let processed = prepared |> List.choose (fun (s,r) -> match r with Ok points -> Some (s,points) | Error _ -> None)
-    let referenceCurve = processed |> List.tryFind (fun (s,_) -> s.Curve.Dataset.Id=reference)
+    let currentRole = if roleFilter="X" then "X profile" elif roleFilter="Y" then "Y profile" else "PDD"
+    let referenceCurve = processed |> List.tryFind (fun (s,_) -> label s.Curve.Dataset=reference && s.Mapping.Role=currentRole)
     /// Returns the active normalization for one curve role.
     let modeFor role = if role="PDD" then pddMode else profileMode
     /// Describes the applied normalization in exports and the toolbar.
@@ -195,8 +245,7 @@ let view () =
                  yield csvRow [s.Curve.Dataset.Label;s.Mapping.Role;name;value |> Option.map format |> Option.defaultValue ""
                                optionLabel flatness flatnessOptions;optionLabel symmetry symmetryOptions;format region;format s.Mapping.CaxMm]] |> String.concat "\n"
     let visible = processed |> List.filter (fun (s,_) ->
-        if roleFilter="Profiles" then s.Mapping.Role<>"PDD"
-        elif roleFilter="X" then s.Mapping.Role="X profile"
+        if roleFilter="X" then s.Mapping.Role="X profile"
         elif roleFilter="Y" then s.Mapping.Role="Y profile"
         else s.Mapping.Role="PDD")
     let useDifference = differences && referenceCurve.IsSome
@@ -205,7 +254,7 @@ let view () =
             if not useDifference then Some points
             else
                 match referenceCurve with
-                | Some (r,rp) when r.Mapping.Role=s.Mapping.Role && r.Curve.Dataset.Id<>s.Curve.Dataset.Id ->
+                | Some (r,rp) when r.Mapping.Role=s.Mapping.Role && label s.Curve.Dataset<>reference ->
                     Some (points |> List.choose (fun p -> Analysis.interpolate rp p.Position |> Option.map (fun baseline -> {p with Dose=p.Dose-baseline;Uncertainty=0.0})))
                 | _ -> None
         values |> Option.map (fun p ->
@@ -216,47 +265,55 @@ let view () =
     let normalization = modeLabel (if roleFilter="PDD" then "PDD" else "X profile")
     let raw = modeFor (if roleFilter="PDD" then "PDD" else "X profile")="None"
     let unitName = if raw && useDifference then "Δ dose [Gy]" elif raw then "Dose [Gy]" elif useDifference then "Δ dose [pp]" else "Relative dose [%]"
-    let pending = selected |> List.filter (fun s -> not s.Mapping.Confirmed) |> List.length
     /// Renders a CSV download for currently processed datasets.
     let download (name: string) (text: string) (content: string) =
         Html.a [prop.className "btn btn-ghost btn-sm"; prop.download name
                 prop.href ("data:text/csv;charset=utf-8,"+Uri.EscapeDataString content); prop.text text]
     Html.div [prop.className "analysis-workspace"; prop.children [
-        Html.aside [prop.className "analysis-sidebar"; prop.children [
-            Html.div [prop.className "flex items-center justify-between gap-2"; prop.children [
-                Html.h2 [prop.className "text-sm font-semibold"; prop.text "Datasets"]
-                Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text (if busy then "Loading…" else "Refresh"); prop.onClick (fun _ -> refresh())]]]
-            Html.input [prop.className "input input-bordered input-sm w-full"; prop.placeholder "Filter outputs"; prop.custom ("aria-label","Filter outputs")
-                        prop.value query; prop.onChange setQuery]
-            Html.div [prop.className "analysis-dataset-list"; prop.children [
-                if datasets.IsEmpty && not busy then Html.p [prop.className "text-sm text-base-content/60"; prop.text "No collected outputs."]
-                for dataset in datasets |> List.filter (fun d -> d.Label.ToLowerInvariant().Contains(query.ToLowerInvariant())) do
-                    let isSelected = selected |> List.exists (fun s -> s.Curve.Dataset.Id=dataset.Id)
-                    Html.label [prop.className (if isSelected then "analysis-dataset selected" else "analysis-dataset"); prop.title dataset.Id; prop.children [
-                        Html.input [prop.type' "checkbox"; prop.className "checkbox checkbox-xs"; prop.disabled busy; prop.isChecked isSelected; prop.onChange (fun (_:bool) -> toggle dataset)]
-                        Html.span [prop.className "analysis-dot"; prop.style [style.backgroundColor (AnalysisPlot.color dataset.Id)]]
-                        Html.span [prop.className "min-w-0 break-words"; prop.text (label dataset)]]]]]
-            Html.div [prop.className "analysis-sidebar-footer"; prop.children [
-                Html.span $"{selected.Length} selected"
-                Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled (selected.IsEmpty || busy); prop.text "Clear"
-                             prop.onClick (fun _ -> setSelected (fun _ -> []); setReference ""; setDifferences false)]]]
-        ]]
+        Html.div [prop.className "analysis-runs"; prop.children [
+            Html.span [prop.className "text-sm font-semibold"; prop.text "Runs"]
+            Html.div [prop.className "analysis-run-choices"; prop.children [
+                if runs.IsEmpty && not busy then Html.span [prop.className "text-sm text-base-content/60"; prop.text "No collected runs."]
+                for runId in runs do
+                    let active = List.contains runId selectedRuns
+                    let available = collections runId datasets
+                    let current = currentCollection runId
+                    Html.details [prop.className (if active then "analysis-run active" else "analysis-run"); prop.children [
+                        Html.summary [prop.children [
+                            Html.input [prop.type' "checkbox"; prop.className "checkbox checkbox-xs"; prop.disabled busy
+                                        prop.custom ("aria-label","Include run "+runId); prop.isChecked active
+                                        prop.onClick (fun event -> event.stopPropagation())
+                                        prop.onChange (fun (_:bool) -> toggleRun runId)]
+                            Html.span runId]]
+                        Html.div [prop.className "analysis-collection-list"; prop.children [
+                            for index,(key,_) in List.indexed available do
+                                Html.label [prop.className "analysis-collection"; prop.children [
+                                    Html.input [prop.type' "radio"; prop.name ("collection-"+runId); prop.className "radio radio-xs"
+                                                prop.disabled busy; prop.isChecked (current=Some key)
+                                                prop.onChange (fun (_:bool) -> if not busy then loadRun runId key)]
+                                    Html.span (if key="" then "Historical" else key)
+                                    if index=0 then Html.span [prop.className "text-base-content/50 text-xs"; prop.text "Latest"]]]]]]]]]
+            Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text (if busy then "Loading…" else "Refresh"); prop.onClick (fun _ -> refresh())]
+            if not selectedRuns.IsEmpty then
+                Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text "Clear"
+                             prop.onClick (fun _ -> setSelectedRuns (fun _ -> []); setSelected (fun _ -> []); setDrafts (fun _ -> Map.empty); setReference ""; setDifferences false)]]]
         Html.div [prop.className "analysis-main"; prop.children [
             Html.div [prop.className "analysis-toolbar"; prop.children [
                 Html.div [prop.className "flex gap-5"; prop.children [for title in ["Profiles";"Metrics";"Settings"] -> tab activeTab title setActiveTab]]
                 if not processed.IsEmpty then
                     Html.div [prop.className "flex gap-1"; prop.children [download "analysis-curves.csv" "Curves CSV" curveExport; download "analysis-metrics.csv" "Metrics CSV" metricExport]]]]
             if error<>"" then Html.div [prop.className "alert alert-error text-sm"; prop.custom ("role","alert"); prop.text error]
-            if pending>0 then
-                Html.button [prop.className "analysis-notice"; prop.text $"{pending} mapping(s) require confirmation · Open settings"; prop.onClick (fun _ -> setActiveTab "Settings")]
             for s,result in prepared do
                 match result with
-                | Error message when s.Mapping.Confirmed -> Html.p [prop.className "text-error text-sm"; prop.text $"{label s.Curve.Dataset}: {message}"]
+                | Error message when s.Mapping.Confirmed -> Html.p [prop.className "text-error text-sm"; prop.text $"{label s.Curve.Dataset} · {s.Mapping.Role}: {message}"]
+                | Error _ ->
+                    Html.button [prop.className "analysis-notice"; prop.text $"{label s.Curve.Dataset} · {s.Mapping.Role}: Geometry unavailable · Settings"
+                                 prop.onClick (fun _ -> setActiveTab "Settings")]
                 | _ -> Html.none
             if activeTab="Profiles" then
                 Html.div [prop.className "analysis-plot-toolbar"; prop.children [
                     Html.div [prop.className "join"; prop.children [
-                        for role in ["Profiles";"X";"Y";"PDD"] do
+                        for role in ["X";"Y";"PDD"] do
                             Html.button [prop.className (if roleFilter=role then "join-item btn btn-sm btn-primary" else "join-item btn btn-sm btn-ghost")
                                          prop.text role; prop.onClick (fun _ -> setRoleFilter role)]]]
                     Html.span [prop.className "text-xs text-base-content/60"; prop.text normalization]
@@ -264,7 +321,7 @@ let view () =
                         if referenceCurve.IsSome then checkbox "Difference" differences setDifferences
                         if not raw && not useDifference then checkbox "95–105%" plateau setPlateau]]]]
                 if selected.IsEmpty then
-                    Html.div [prop.className "analysis-empty"; prop.text "Select collected outputs."]
+                    Html.div [prop.className "analysis-empty"; prop.text "Select runs."]
                 elif customBounds && xmin>=xmax then
                     Html.div [prop.className "analysis-empty"; prop.text "Plot minimum must be below maximum. Change bounds in Settings."]
                 else
@@ -278,7 +335,7 @@ let view () =
             elif activeTab="Metrics" then
                 Html.div [prop.className "space-y-6 p-4"; prop.children [
                     Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+format (100.0*region)+"%"])]
-                    if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "Select curves with confirmed mappings."]
+                    if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "No metrics available for the selected runs."]
                     for role in ["X profile";"Y profile";"PDD"] do
                         let curves = processed |> List.filter (fun (s,_) -> s.Mapping.Role=role)
                         if not curves.IsEmpty then metricTable role flatnessDefinition symmetryDefinition region curves]]
@@ -302,23 +359,35 @@ let view () =
                         checkbox "Custom horizontal range" customBounds setCustomBounds
                         if customBounds then
                             Html.div [prop.className "grid grid-cols-2 gap-3"; prop.children [numeric "Minimum [mm]" xmin setXmin; numeric "Maximum [mm]" xmax setXmax]]
-                        choice "Difference reference" reference (("","None") :: (processed |> List.map (fun (s,_) -> s.Curve.Dataset.Id,label s.Curve.Dataset)))
+                        choice "Difference reference" reference (("","None") :: (selectedRuns |> List.map (fun runId -> runId,runId)))
                             (fun value -> setReference value; setDifferences (value<>""))]]
-                    Html.section [prop.className "analysis-settings-card"; prop.children [
+                    Html.section [prop.className "analysis-settings-card analysis-geometry"; prop.children [
                         Html.h3 "Geometry"
-                        if selected.IsEmpty then Html.p [prop.className "text-sm text-base-content/60"; prop.text "No selected datasets."]
+                        if selected.IsEmpty then Html.p [prop.className "text-sm text-base-content/60"; prop.text "No loaded curves."]
                         for s in selected do
                             let id = s.Curve.Dataset.Id
-                            Html.details [prop.className "analysis-mapping"; prop.custom ("open",not s.Mapping.Confirmed); prop.children [
-                                Html.summary [prop.children [Html.span (label s.Curve.Dataset); Html.span [prop.className (if s.Mapping.Confirmed then "text-base-content/50" else "text-warning"); prop.text (if s.Mapping.Confirmed then "Mapped" else "Confirm")]]]
+                            let draft = Map.tryFind id drafts
+                            let editing = draft.IsSome || not s.Mapping.Confirmed
+                            let mapping = draft |> Option.defaultValue s.Mapping
+                            let source = s.Curve.MappingSource.Replace("Unconfirmed editable preset. Input detection: ", "")
+                            Html.details [prop.className "analysis-mapping"; prop.children [
+                                Html.summary [prop.children [
+                                    Html.span $"{label s.Curve.Dataset} · {s.Mapping.Role}"
+                                    Html.span [prop.className "text-base-content/50"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "From inputs" else "Override")]]]
                                 Html.div [prop.className "space-y-3 pt-3"; prop.children [
-                                    Html.p [prop.className "text-xs break-words text-base-content/60"; prop.text s.Curve.MappingSource]
-                                    choice "Role" s.Mapping.Role (["PDD";"X profile";"Y profile"] |> List.map (fun v -> v,v)) (fun v -> update id (fun m -> {m with Role=v;Confirmed=false}))
-                                    numeric "Spacing [mm / coordinate]" s.Mapping.StepMm (fun v -> update id (fun m -> {m with StepMm=v;Confirmed=false}))
-                                    numeric "Origin [mm]" s.Mapping.OriginMm (fun v -> update id (fun m -> {m with OriginMm=v;Confirmed=false}))
-                                    numeric "CAX [mm]" s.Mapping.CaxMm (fun v -> update id (fun m -> {m with CaxMm=v;Confirmed=false}))
-                                    Html.p [prop.className "text-xs text-base-content/60"; prop.text $"{s.Curve.Points.Length} samples · Stored axis {s.Mapping.Axis} · {format s.Curve.Points.Head.Position} to {format (List.last s.Curve.Points).Position}"]
-                                    Html.button [prop.className "btn btn-sm btn-primary"; prop.disabled busy; prop.text "Confirm and save"; prop.onClick (fun _ -> saveMapping s)]]]]]]]
+                                    Html.p [prop.className "text-xs break-words text-base-content/60"; prop.text source]
+                                    if editing then
+                                        choice "Role" mapping.Role (["PDD";"X profile";"Y profile"] |> List.map (fun v -> v,v)) (fun v -> editMapping s (fun m -> {m with Role=v}))
+                                        numeric "Spacing [mm / coordinate]" mapping.StepMm (fun v -> editMapping s (fun m -> {m with StepMm=v}))
+                                        numeric "Origin [mm]" mapping.OriginMm (fun v -> editMapping s (fun m -> {m with OriginMm=v}))
+                                        numeric "CAX [mm]" mapping.CaxMm (fun v -> editMapping s (fun m -> {m with CaxMm=v}))
+                                        Html.div [prop.className "flex gap-2"; prop.children [
+                                            Html.button [prop.className "btn btn-sm btn-primary"; prop.disabled busy; prop.text "Save override"; prop.onClick (fun _ -> saveMapping s mapping)]
+                                            if draft.IsSome then Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Cancel"; prop.onClick (fun _ -> setDrafts (Map.remove id))]]]
+                                    else
+                                        Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Spacing {format mapping.StepMm} mm · Origin {format mapping.OriginMm} mm · CAX {format mapping.CaxMm} mm"]
+                                        Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Manual override"; prop.onClick (fun _ -> editMapping s (fun mapping -> mapping))]
+                                    Html.p [prop.className "text-xs text-base-content/60"; prop.title s.Curve.Dataset.Id; prop.text $"{s.Curve.Points.Length} samples · {s.Curve.Dataset.Label}"]]]]]]]
                     Html.details [prop.className "analysis-methods"; prop.children [
                         Html.summary "Equations and references"
                         Html.div [prop.className "space-y-3 pt-3 text-sm"; prop.children [
