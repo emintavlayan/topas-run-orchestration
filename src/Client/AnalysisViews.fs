@@ -51,7 +51,7 @@ let private checkbox (label: string) (value: bool) (changed: bool -> unit) =
 /// Renders a keyboard-accessible tab button.
 let private tab (current: string) (label: string) (changed: string -> unit) =
     Html.button [prop.className (if current=label then "analysis-tab active" else "analysis-tab")
-                 prop.custom ("aria-pressed",current=label); prop.text label; prop.onClick (fun _ -> changed label)]
+                 prop.custom ("aria-pressed",(current=label)); prop.text label; prop.onClick (fun _ -> changed label)]
 
 /// Escapes dataset paths and metadata as CSV cells.
 let private csvRow values = values |> List.map (fun (value: string) -> "\""+value.Replace("\"","\"\"")+"\"") |> String.concat ","
@@ -88,7 +88,9 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
         Html.h3 [prop.className "text-sm font-semibold"; prop.text role]
         Html.div [prop.className "overflow-x-auto rounded-lg border border-base-300"; prop.children [
             Html.table [prop.className "table table-sm analysis-metrics"; prop.children [
-                Html.thead [Html.tr [Html.th "Dataset"; for _,text in headers -> Html.th text]]
+                Html.thead [Html.tr [
+                    yield Html.th "Dataset"
+                    for _,text in headers do yield Html.th text]]
                 Html.tbody [
                     for s,_ in curves do
                         let values = Analysis.metricsWithConventions role flatness symmetry region s.Mapping.CaxMm (physical s) |> Map.ofList
@@ -207,14 +209,16 @@ let view () =
                     Some (points |> List.choose (fun p -> Analysis.interpolate rp p.Position |> Option.map (fun baseline -> {p with Dose=p.Dose-baseline;Uncertainty=0.0})))
                 | _ -> None
         values |> Option.map (fun p ->
-            {AnalysisPlot.Curve.Id=s.Curve.Dataset.Id; Label=label s.Curve.Dataset; Role=s.Mapping.Role
-             Points=p |> List.filter (fun p -> not customBounds || (p.Position>=xmin && p.Position<=xmax))}))
+            let curve: AnalysisPlot.Curve =
+                {Id=s.Curve.Dataset.Id; Label=label s.Curve.Dataset; Role=s.Mapping.Role
+                 Points=p |> List.filter (fun p -> not customBounds || (p.Position>=xmin && p.Position<=xmax))}
+            curve))
     let normalization = modeLabel (if roleFilter="PDD" then "PDD" else "X profile")
     let raw = modeFor (if roleFilter="PDD" then "PDD" else "X profile")="None"
     let unitName = if raw && useDifference then "Δ dose [Gy]" elif raw then "Dose [Gy]" elif useDifference then "Δ dose [pp]" else "Relative dose [%]"
     let pending = selected |> List.filter (fun s -> not s.Mapping.Confirmed) |> List.length
     /// Renders a CSV download for currently processed datasets.
-    let download name text content =
+    let download (name: string) (text: string) (content: string) =
         Html.a [prop.className "btn btn-ghost btn-sm"; prop.download name
                 prop.href ("data:text/csv;charset=utf-8,"+Uri.EscapeDataString content); prop.text text]
     Html.div [prop.className "analysis-workspace"; prop.children [
@@ -273,7 +277,7 @@ let view () =
                     | _ -> Html.none
             elif activeTab="Metrics" then
                 Html.div [prop.className "space-y-6 p-4"; prop.children [
-                    Html.p [prop.className "text-xs text-base-content/60"; prop.text $"{optionLabel flatness flatnessOptions} · {optionLabel symmetry symmetryOptions} · Point region {format (100.0*region)}%"]
+                    Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+format (100.0*region)+"%"])]
                     if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "Select curves with confirmed mappings."]
                     for role in ["X profile";"Y profile";"PDD"] do
                         let curves = processed |> List.filter (fun (s,_) -> s.Mapping.Role=role)
