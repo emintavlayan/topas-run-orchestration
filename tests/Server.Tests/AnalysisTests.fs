@@ -126,6 +126,24 @@ let ``Analysis loads collected dose and resolves matching batch inputs`` () =
     finally
         if System.IO.Directory.Exists folder then System.IO.Directory.Delete(folder,true)
 
+/// Checks unresolved depth scorers remain unconfirmed PDD presets regardless of folder naming.
+[<Fact>]
+let ``Unknown depth scorer is not suggested as a Y profile`` () =
+    let folder=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"analysis-depth-"+System.Guid.NewGuid().ToString("N"))
+    try
+        let settings=buildSettings folder
+        let output=System.IO.Path.Combine(folder,"outputs","1112","20261031T210000","depthDose")
+        System.IO.Directory.CreateDirectory output |> ignore
+        let csv=System.IO.Path.Combine(output,"dose_with_uncertainty.csv")
+        System.IO.File.WriteAllLines(csv,[yield "x,y,z,dose_to_medium_Gy,standard_uncertainty_Gy";for z in 0..24 -> $"0,0,{z},1,0.01"])
+        let loaded=assertOk(AnalysisOperation.loadCurve settings "1112/20261031T210000/depthDose/dose_with_uncertainty.csv")
+        Assert.Equal("PDD",loaded.Mapping.Value.Role)
+        Assert.Equal(2,loaded.Mapping.Value.Axis)
+        Assert.Equal(1.,loaded.Mapping.Value.OriginMm)
+        Assert.False(loaded.Mapping.Value.Confirmed)
+    finally
+        if System.IO.Directory.Exists folder then System.IO.Directory.Delete(folder,true)
+
 /// Checks flatness and symmetry conventions can be selected independently.
 [<Fact>]
 let ``Independent metric definition selection preserves requested baselines`` () =

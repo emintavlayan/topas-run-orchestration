@@ -11,7 +11,7 @@ Analyse reads collected results directly from the server.
 3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; enter a manual override and **Save override** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry. A saved override takes precedence over input inference. Use **Settings → Geometry → Use inputs** to restore input-derived geometry; the existing override is backed up only after inference succeeds.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
 5. Open **Metrics** for one row per dataset and one column per metric.
-6. Choose **Export curves** or **Metrics CSV** from the toolbar.
+6. Choose **Export Curves** or **Export Metrics** from the toolbar.
 
 ## Normalization
 
@@ -51,18 +51,18 @@ The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PN
 
 **Settings → Plot** controls uncertainty bands, sample markers, horizontal bounds and the reference run. Each displayed curve uses the reference scorer with the same role, including both axes in **Profiles**. Choosing a reference enables the **Difference** view; switch it off in the plot toolbar to return to overlays. Only roles with an available reference are plotted in Difference. Differences use only overlapping coordinates and are in Gy or percentage points.
 
-Metrics always use the complete curve. Plot bounds and interactive zoom do not limit metrics or exports. Metrics, axis labels and hover values display one decimal place; raw-dose plots below 0.1 Gy use scientific notation. CSV exports retain six significant digits. Missing values appear as **—**.
+Metrics always use the complete curve. Plot bounds and interactive zoom do not limit metrics or exports. FWHM displays whole millimetres. Other metrics, axis labels and hover values display one decimal place; raw-dose plots below 0.1 Gy use scientific notation. CSV exports retain six significant digits. Missing values appear as **—**.
 
 | Result | Definition |
 |---|---|
 | dmax | Position of the highest sampled PDD dose |
 | R90, R80, R50 | First distal threshold crossing after that maximum, linearly interpolated |
-| 50% width | Distance between outer half-maximum profile crossings |
+| FWHM [mm] | Distance between outer half-maximum profile crossings |
 | Centre | Midpoint of those crossings |
 | L/R 20–80 | Separate left/right penumbra distances |
 
 R50 is dose-based, not an I50 conversion. No smoothing or peak fitting is applied. Finite sampling and missing edge/depth coverage limit available metrics.
 
-Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export curves includes role, normalization, central sample count and CAX; Metrics CSV includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
+Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export Curves includes role, normalization, central sample count and CAX; Export Metrics includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
 
 Supported now: collected 1D scorers, generated-input geometry inference, explicit overrides, overlays, differences, metrics and CSV export. Multidimensional scorers require explicit extraction. Measured-data import, 3D slicing, gamma and derived-metric uncertainty propagation remain future work.

@@ -91,7 +91,7 @@ let private prepare profileMode pddMode count position selected =
 let private metricTable role flatness symmetry region (curves: (Selection * AnalysisPoint list) list) =
     let headers =
         if role="PDD" then ["Sampled dmax (mm)","dmax [mm]"; "R90 (mm)","R90 [mm]"; "R80 (mm)","R80 [mm]"; "R50 (mm)","R50 [mm]"]
-        else ["FWHM (mm)","50% width [mm]"; "Left penumbra 20-80 (mm)","L 20–80 [mm]"; "Right penumbra 20-80 (mm)","R 20–80 [mm]"
+        else ["FWHM (mm)","FWHM [mm]"; "Left penumbra 20-80 (mm)","L 20–80 [mm]"; "Right penumbra 20-80 (mm)","R 20–80 [mm]"
               "Field centre (mm)","Centre [mm]"; "Flatness (%)","Flatness [%]"; "Symmetry (%)","Symmetry [%]"]
     Html.section [prop.className "space-y-2"; prop.children [
         Html.h3 [prop.className "text-sm font-semibold"; prop.text role]
@@ -109,7 +109,8 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
                                 Html.span (label s.Curve.Dataset)]]
                             for key,_ in headers do
                                 let value = Map.tryFind key values |> Option.flatten
-                                Html.td [prop.text (value |> Option.map Analysis.displayNumber |> Option.defaultValue "—")]]]]]]]]]
+                                let display = if key="FWHM (mm)" then sprintf "%.0f" else Analysis.displayNumber
+                                Html.td [prop.text (value |> Option.map display |> Option.defaultValue "—")]]]]]]]]]
 
 /// Renders the compact Analyse workspace with dedicated settings and geometry editors.
 [<ReactComponent>]
@@ -314,7 +315,7 @@ let View () =
             Html.div [prop.className "analysis-toolbar"; prop.children [
                 Html.div [prop.className "flex gap-5"; prop.children [for title in ["Profiles";"Metrics";"Settings"] -> tab activeTab title setActiveTab]]
                 if not processed.IsEmpty then
-                    Html.div [prop.className "flex gap-1"; prop.children [download "analysis-curves.csv" "Export curves" curveExport; download "analysis-metrics.csv" "Metrics CSV" metricExport]]]]
+                    Html.div [prop.className "flex gap-1"; prop.children [download "analysis-curves.csv" "Export Curves" curveExport; download "analysis-metrics.csv" "Export Metrics" metricExport]]]]
             if error<>"" then Html.div [prop.className "alert alert-error text-sm"; prop.custom ("role","alert"); prop.text error]
             for s,result in prepared do
                 match result with

@@ -59,7 +59,8 @@ let private loadCurveCore settings id useSavedMapping =
             if points.Length < 2 || points |> List.exists (fun p -> p.Dose < 0.0 || p.Uncertainty < 0.0) then return! Error "Curve requires at least two non-negative dose samples."
             if (points |> List.map _.Position |> List.distinct |> List.length) <> points.Length then
                 return! Error "Duplicate coordinates are not supported; extract a single curve first."
-            let suggested = {Role=(if id.Contains("pdd") then "PDD" elif selectedAxis=0 then "X profile" else "Y profile"); Axis=selectedAxis; StepMm=2.0; OriginMm=(if id.Contains("pdd") then 1.0 else -299.0); CaxMm=0.0; Confirmed=false}
+            let suggestedRole = match selectedAxis with 0 -> "X profile" | 1 -> "Y profile" | _ -> "PDD"
+            let suggested = {Role=suggestedRole; Axis=selectedAxis; StepMm=2.0; OriginMm=(if selectedAxis=2 then 1.0 else -299.0); CaxMm=0.0; Confirmed=false}
             let resolved,source =
                 match mapping with
                 | Some saved -> saved,"Saved explicit mapping: " + mappingPath
