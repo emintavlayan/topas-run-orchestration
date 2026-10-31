@@ -15,7 +15,8 @@ let color (id: string) =
     let parts = id.Split('/')
     let key = parts |> Array.truncate 2 |> String.concat "/"
     let index = key |> Seq.fold (fun total c -> (total*31+int c)%8) 0
-    [|"#2563eb"; "#e05a36"; "#009e73"; "#a855f7"; "#d18a00"; "#0891b2"; "#db2777"; "#64748b"|][index]
+    let palette = [|"#2563eb"; "#e05a36"; "#009e73"; "#a855f7"; "#d18a00"; "#0891b2"; "#db2777"; "#64748b"|]
+    palette.[index]
 
 /// Chooses a readable major grid spacing for the current data interval.
 let private tickStep span =

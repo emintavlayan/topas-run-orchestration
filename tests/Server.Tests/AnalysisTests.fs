@@ -123,7 +123,8 @@ let ``Central mean uses five samples around the specified CAX`` () =
     Assert.Equal(100., normalized |> List.filter (fun p -> abs p.Position <= 2.) |> List.averageBy _.Dose, 9)
     Assert.Equal(0.01*100./30., normalized[3].Uncertainty, 9)
     let shifted=points |> List.map (fun p -> {p with Position=p.Position+7.})
-    Assert.Equal(100., (assertOk(normalizeCentralMean 5 7. shifted))[3].Dose, 9)
+    let shiftedNormalized=assertOk(normalizeCentralMean 5 7. shifted)
+    Assert.Equal(100., shiftedNormalized.[3].Dose, 9)
 
 /// Checks an even central sample count and refuses unsupported normalization windows.
 [<Fact>]
