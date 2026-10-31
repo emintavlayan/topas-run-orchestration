@@ -166,6 +166,12 @@ let topasApi (_: HttpContext) : ITopasApi = {
             return! AnalysisOperation.saveMapping settings request
         }
     }
+    resetAnalysisMapping = fun id -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.resetMapping settings id
+        }
+    }
     getAppConfig = getAppConfigHandler
     getTemplateFiles = getTemplateFilesHandler
     previewGenerate = previewGenerateHandler

@@ -6,14 +6,14 @@ Analyse reads final `dose_with_uncertainty.csv` files from the configured output
 
 ## Geometry detection
 
-For `outputs/1113/{timestamp}/pdd/dose_with_uncertainty.csv`, the scorer manifest identifies retained run IDs. Analyse reads their generated `inputs/1113/{runId}.txt` files, matches the scorer OutputFile suffix, and resolves its Component, bin count, half-length, translations and parent chain. All contributing inputs must agree. Current unrotated TsBox X/Y profiles and water-parent TsCylinder/TsBox PDD scorers are supported. Literal mm/cm/m/um values and direct parameter references are resolved; expressions and rotated ancestry fall back to explicit mapping.
+For `outputs/1113/{timestamp}/pdd/dose_with_uncertainty.csv`, the scorer manifest identifies retained run IDs. Analyse reads their generated `inputs/1113/{runId}.txt` files, matches the scorer OutputFile suffix, and resolves its Component, bin count, half-length, translations and parent chain. Scorer bin counts take precedence over component bin counts; absent both, TOPAS defaults to one bin. All contributing inputs must agree. Current unrotated TsBox X/Y profiles and water-parent TsCylinder/TsBox PDD scorers are supported. Literal mm/cm/m/um values and direct parameter references are resolved; expressions and rotated ancestry fall back to explicit mapping.
 
 For the current water-tank templates:
 
 - PDD: 25 bins over 50 mm; depth centres 1, 3, …, 49 mm from the water entrance face.
 - X/Y profiles: 300 bins over 600 mm; centres −299, −297, …, +299 mm.
 
-Input files are the archived generated inputs, not current templates. Missing inputs, inconsistent geometry, mismatched bin counts and ambiguous scorers do not enable inferred distance metrics. The interface reports **Geometry unavailable**, shows the reason under Settings and offers a manual mapping editor. Input-derived geometry is active immediately with no user confirmation. Manually saved overrides are atomically saved beside the CSV as `.analysis.json`; the CSV is unchanged. Saved overrides take precedence. Historical manually renamed/default scorer collections require explicit mapping. Multidimensional scorers are rejected rather than averaged implicitly.
+Input files are the archived generated inputs, not current templates. Missing inputs, inconsistent geometry, mismatched bin counts and ambiguous scorers do not enable inferred distance metrics. The interface reports **Geometry unavailable**, shows the reason under Settings and offers a manual mapping editor. Input-derived geometry is active immediately with no user confirmation. Manually saved overrides are atomically saved beside the CSV as `.analysis.json`; the CSV is unchanged. Saved overrides take precedence. Use inputs re-runs inference while ignoring the sidecar; only successful inference archives an existing sidecar as `.analysis.json.<id>.bak` and activates the inferred geometry. Failure leaves the override unchanged. Historical manually renamed/default scorer collections require explicit mapping. Multidimensional scorers are rejected rather than averaged implicitly.
 
 ## Curve processing
 
@@ -53,9 +53,9 @@ Profile results include FWHM, centre from outer 50% crossings, and separate left
 
 ## Validation
 
-`AnalysisTests.fs` checks analytic range crossings, 100% ideal profiles, exact 100.3% ratio examples, difference definitions, normalization and uncertainty scaling, five/ten-point CAX means, signed area integration, unconfirmed mappings, current generated-input fixtures, incompatible bin counts, rotated-geometry fallback, server input lookup, saved overrides and dataset path isolation.
+`AnalysisTests.fs` checks analytic range crossings, 100% ideal profiles, exact 100.3% ratio examples, difference definitions, normalization and uncertainty scaling, five/ten-point CAX means, signed area integration, unconfirmed mappings, current generated-input fixtures including Y profiles, inherited geometry bins and scorer precedence, incompatible bin counts, rotated-geometry fallback, server input lookup, saved overrides, restoration with sidecar backup and dataset path isolation.
 
-The fixture combines the current water-tank, PDD and X-profile templates from `emintavlayan/tsebt-monte-carlo-notes-and-decisions`, revision `5f0d278d4342a90778388197d418f9c96eb28c36`, substituting the output stem only.
+The fixture combines the current water-tank, PDD and X-profile templates from `emintavlayan/tsebt-monte-carlo-notes-and-decisions`, revision `5f0d278d4342a90778388197d418f9c96eb28c36`, substituting the output stem only. It also includes the matching Y-profile geometry and bin settings from that revision.
 
 Measured-data import, automatic slices from 3D scorers, gamma and uncertainty propagation for derived metrics are subsequent extensions.
 
@@ -72,3 +72,5 @@ Measured-data import, automatic slices from 3D scorers, gamma and uncertainty pr
 - Manual geometry edits are separate drafts. The active mapping and analysis stay unchanged until the server validates and saves an override. Cancel discards the draft. The persisted `Confirmed` flag remains an internal validity field for sidecar compatibility; it is not a confirmation step for inferred geometry. API failures appear in the workspace; normalization failures identify the affected run and role. Browser-local formula and normalization settings persist, but the selected curve list is not a saved analysis session.
 
 For operator examples, see the [analysis guide](analysis-guide.md).
+
+TOPAS bin inheritance follows the [documented dividable-component scoring rules](https://opentopas.readthedocs.io/en/latest/parameters/scoring/misc.html#binning-in-dividable-components). Inference errors identify the contributing input filename. Central-mean coverage failures report CAX and the mapped sample range. Display values use a shared one-decimal formatter; Plotly hover text is preformatted so it does not display raw floating-point tails. CSV export precision remains unchanged.

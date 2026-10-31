@@ -288,6 +288,7 @@ type ITopasApi = {
     listAnalysisDatasets: unit -> Async<Result<AnalysisDataset list, string>>
     loadAnalysisCurve: string -> Async<Result<AnalysisCurve, string>>
     saveAnalysisMapping: SaveAnalysisMapping -> Async<Result<unit, string>>
+    resetAnalysisMapping: string -> Async<Result<AnalysisCurve, string>>
     getAppConfig: unit -> Async<Result<AppConfigView, string>>
     getTemplateFiles: unit -> Async<Result<TemplateFileInfo list, string>>
     previewGenerate: GeneratePreviewRequest -> Async<Result<GeneratePreviewResult, string>>

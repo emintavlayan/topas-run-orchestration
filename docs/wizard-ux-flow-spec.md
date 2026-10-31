@@ -163,7 +163,7 @@ Collect:
 
 Source: [AnalysisViews.fs](../src/Client/AnalysisViews.fs).
 
-Analyse does not use the wizard stepper or footer. It owns local React state and calls `listAnalysisDatasets`, `loadAnalysisCurve` and `saveAnalysisMapping`. It refreshes its dataset list on mount and provides an explicit Refresh action.
+Analyse does not use the wizard stepper or footer. It owns local React state and calls `listAnalysisDatasets`, `loadAnalysisCurve`, `saveAnalysisMapping` and `resetAnalysisMapping`. It refreshes its dataset list on mount and provides an explicit Refresh action.
 
 The workspace has expandable run IDs in a left sidebar and Profiles, Metrics and Settings tabs. Expanded runs list all collection folders, newest first, with the latest selected by default. A run checkbox selects all scorers from one collection. The Profiles button overlays X (solid) and Y (dashed) by default; X, Y and PDD buttons isolate roles. Metrics uses run rows, metric columns and one decimal place. Settings holds normalization, named equations, region/reference/plot controls and geometry details. Inferred geometry is active immediately. Manual overrides use separate drafts and Save/Cancel; no confirmation is required for inferred geometry. CSV links remain in the toolbar. Run and collection controls are disabled while loading. Narrow screens stack the selector above the plot.
 

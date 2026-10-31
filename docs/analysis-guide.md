@@ -8,10 +8,10 @@ Analyse reads collected results directly from the server.
 
 1. Open **Analyse**. Select run IDs in the left sidebar. Each run's colour identifies its curves; there is no separate plot legend. Expand a run (for example **1114**) to see all collection folders, newest first; the latest is selected by default. Use **Refresh** to discover new collections.
 2. **Profiles** shows X and Y together: X is solid, Y is dashed. Use **X**, **Y** or **PDD** to isolate a role. Choosing a run loads every scorer from one collection together; changing the collection replaces that run’s curves. Collections are never mixed automatically.
-3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; enter a manual override and **Save override** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry.
+3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; enter a manual override and **Save override** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry. A saved override takes precedence over input inference. Use **Settings → Geometry → Use inputs** to restore input-derived geometry; the existing override is backed up only after inference succeeds.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
 5. Open **Metrics** for one row per dataset and one column per metric.
-6. Download **Curves CSV** or **Metrics CSV** from the toolbar.
+6. Choose **Export curves** or **Metrics CSV** from the toolbar.
 
 ## Normalization
 
@@ -24,6 +24,8 @@ Analyse reads collected results directly from the server.
 | None | Raw summed dose in Gy |
 
 Central mean defaults to 10 samples. For the current centred 2 mm profile grid, these are −9, −7, …, +9 mm, matching the earlier mean within ±1 cm. Five points selects the nearest five samples. Equal-distance ties use the lower position. The requested count must exist and include samples on both sides of CAX; CAX must lie within the sampled profile. There is no fallback to fewer samples or another normalization.
+
+If CAX lies outside a profile, the error includes the mapped minimum and maximum. Settings shows the source mapping, stored coordinate range, spacing and origin. For the standard 300-bin profile, bin coordinates 0–299 should map to −299.0…+299.0 mm. A new collection folder alone does not prove the selected mapping is correct.
 
 The normalization modes, central count and equation choices are saved in this browser. A missing or non-positive reference produces an inline error. No extrapolation is used. Normalization removes amplitude differences; use **None** with consistent source histories/weights when comparing raw doses. Gy is not automatically Gy/MU.
 
@@ -61,6 +63,6 @@ Metrics always use the complete curve. Plot bounds and interactive zoom do not l
 
 R50 is dose-based, not an I50 conversion. No smoothing or peak fitting is applied. Finite sampling and missing edge/depth coverage limit available metrics.
 
-Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Curves CSV includes role, normalization, central sample count and CAX; Metrics CSV includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
+Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export curves includes role, normalization, central sample count and CAX; Metrics CSV includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
 
 Supported now: collected 1D scorers, generated-input geometry inference, explicit overrides, overlays, differences, metrics and CSV export. Multidimensional scorers require explicit extraction. Measured-data import, 3D slicing, gamma and derived-metric uncertainty propagation remain future work.

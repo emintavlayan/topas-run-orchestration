@@ -75,6 +75,15 @@ let ``Input geometry resolves current scorers and detects incompatible grids`` (
     let profile=assertOk(AnalysisInput.mappingFromText "xprofile" 0 300 text)
     Assert.Equal(-299.,profile.OriginMm)
     Assert.Equal(2.,profile.StepMm)
+    let yProfile=assertOk(AnalysisInput.mappingFromText "yprofile" 1 300 text)
+    Assert.Equal("Y profile",yProfile.Role)
+    Assert.Equal(-299.,yProfile.OriginMm)
+    Assert.Equal(2.,yProfile.StepMm)
+    let inherited=text.Replace("i:Sc/YProfileFull/YBins", "i:Ge/YProfileFull/YBins")
+    Assert.Equal(yProfile,assertOk(AnalysisInput.mappingFromText "yprofile" 1 300 inherited))
+    let rebinned=inherited+"\ni:Sc/YProfileFull/YBins = 150\n"
+    Assert.Equal(4.,(assertOk(AnalysisInput.mappingFromText "yprofile" 1 150 rebinned)).StepMm)
+    Assert.True(Result.isError(AnalysisInput.mappingFromText "yprofile" 1 300 rebinned))
     Assert.True(Result.isError(AnalysisInput.mappingFromText "pdd" 2 20 text))
     Assert.True(Result.isError(AnalysisInput.mappingFromText "pdd" 2 25 (text+"\nd:Ge/WaterTank/RotY = 10 deg\n")))
 
@@ -89,7 +98,8 @@ let ``Analysis loads collected dose and resolves matching batch inputs`` () =
         System.IO.Directory.CreateDirectory output |> ignore
         System.IO.Directory.CreateDirectory inputs |> ignore
         let fixture=System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__,"Fixtures","generated-input-1113.txt"))
-        System.IO.File.WriteAllText(System.IO.Path.Combine(inputs,"seed11137_phsp21.txt"),fixture)
+        let inputPath=System.IO.Path.Combine(inputs,"seed11137_phsp21.txt")
+        System.IO.File.WriteAllText(inputPath,fixture)
         System.IO.File.WriteAllText(System.IO.Path.Combine(output,"collect_manifest.tsv"),"scorer\trunId\nPDD\tseed11137_phsp21\n")
         let csv=System.IO.Path.Combine(output,"dose_with_uncertainty.csv")
         System.IO.File.WriteAllLines(csv, [yield "x,y,z,dose_to_medium_Gy,standard_uncertainty_Gy"; for z in 0..24 -> $"0,0,{z},1,0.01"])
@@ -103,6 +113,15 @@ let ``Analysis loads collected dose and resolves matching batch inputs`` () =
         assertOk(AnalysisOperation.saveMapping settings {Id=datasets.Head.Id;Mapping={loaded.Mapping.Value with OriginMm=2.}}) |> ignore
         let overridden=assertOk(AnalysisOperation.loadCurve settings datasets.Head.Id)
         Assert.Equal(2.,overridden.Mapping.Value.OriginMm)
+        System.IO.File.Delete(inputPath)
+        Assert.True(Result.isError(AnalysisOperation.resetMapping settings datasets.Head.Id))
+        Assert.True(System.IO.File.Exists(csv+".analysis.json"))
+        System.IO.File.WriteAllText(inputPath,fixture)
+        let restored=assertOk(AnalysisOperation.resetMapping settings datasets.Head.Id)
+        Assert.Equal(1.,restored.Mapping.Value.OriginMm)
+        Assert.False(System.IO.File.Exists(csv+".analysis.json"))
+        Assert.Single(System.IO.Directory.GetFiles(output,"*.analysis.json.*.bak")) |> ignore
+        Assert.Equal(1.,(assertOk(AnalysisOperation.loadCurve settings datasets.Head.Id)).Mapping.Value.OriginMm)
         Assert.True(Result.isError(AnalysisOperation.loadCurve settings "../../secret.csv"))
     finally
         if System.IO.Directory.Exists folder then System.IO.Directory.Delete(folder,true)

@@ -109,7 +109,7 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
                                 Html.span (label s.Curve.Dataset)]]
                             for key,_ in headers do
                                 let value = Map.tryFind key values |> Option.flatten
-                                Html.td [prop.text (value |> Option.map (fun v -> v.ToString("F1", Globalization.CultureInfo.InvariantCulture)) |> Option.defaultValue "—")]]]]]]]]]
+                                Html.td [prop.text (value |> Option.map Analysis.displayNumber |> Option.defaultValue "—")]]]]]]]]]
 
 /// Renders the compact Analyse workspace with dedicated settings and geometry editors.
 [<ReactComponent>]
@@ -191,8 +191,7 @@ let View () =
         setCollectionChoices (Map.add runId collectionId)
         discardRunDrafts runId
         if selectedRuns.IsEmpty then
-            setRoleFilter (if loaded |> List.exists (fun s -> s.Mapping.Role="X profile") then "X"
-                           elif loaded |> List.exists (fun s -> s.Mapping.Role="Y profile") then "Y" else "PDD")
+            setRoleFilter (if loaded |> List.exists (fun s -> s.Mapping.Role="X profile" || s.Mapping.Role="Y profile") then "Profiles" else "PDD")
         let failures = results |> Array.choose (fun (d,result) -> match result with Error message -> Some (d.Label+": "+message) | Ok _ -> None)
         setError (String.concat "\n" failures) })
     /// Toggles a run using its current or latest collection.
@@ -220,6 +219,18 @@ let View () =
                     {Curve={item.Curve with Mapping=Some resolved;MappingSource="Saved manual override."}; Mapping=resolved}
                 else item))
             setDrafts (Map.remove id)
+        | Error message -> setError message })
+    /// Replaces a saved override with geometry re-derived from the archived inputs.
+    let useInputs s = run (async {
+        let id = s.Curve.Dataset.Id
+        let! result = api.resetAnalysisMapping id
+        match result with
+        | Ok curve ->
+            match curve.Mapping with
+            | Some mapping ->
+                setSelected (fun values -> values |> List.map (fun item -> if item.Curve.Dataset.Id=id then {Curve=curve;Mapping=mapping} else item))
+                setDrafts (Map.remove id)
+            | None -> setError "Input geometry is unavailable."
         | Error message -> setError message })
     let prepared = selected |> List.map (fun s -> s,prepare profileMode pddMode count normPosition s)
     let processed = prepared |> List.choose (fun (s,r) -> match r with Ok points -> Some (s,points) | Error _ -> None)
@@ -303,7 +314,7 @@ let View () =
             Html.div [prop.className "analysis-toolbar"; prop.children [
                 Html.div [prop.className "flex gap-5"; prop.children [for title in ["Profiles";"Metrics";"Settings"] -> tab activeTab title setActiveTab]]
                 if not processed.IsEmpty then
-                    Html.div [prop.className "flex gap-1"; prop.children [download "analysis-curves.csv" "Curves CSV" curveExport; download "analysis-metrics.csv" "Metrics CSV" metricExport]]]]
+                    Html.div [prop.className "flex gap-1"; prop.children [download "analysis-curves.csv" "Export curves" curveExport; download "analysis-metrics.csv" "Metrics CSV" metricExport]]]]
             if error<>"" then Html.div [prop.className "alert alert-error text-sm"; prop.custom ("role","alert"); prop.text error]
             for s,result in prepared do
                 match result with
@@ -333,7 +344,7 @@ let View () =
                     Html.p [prop.className "text-xs text-base-content/60"; prop.text ("Reference: "+reference)]
             elif activeTab="Metrics" then
                 Html.div [prop.className "space-y-6 p-4"; prop.children [
-                    Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+format (100.0*region)+"%"])]
+                    Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+Analysis.displayNumber (100.0*region)+"%"])]
                     if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "No metrics available for the selected runs."]
                     for role in ["X profile";"Y profile";"PDD"] do
                         let curves = processed |> List.filter (fun (s,_) -> s.Mapping.Role=role)
@@ -375,6 +386,8 @@ let View () =
                                     Html.span [prop.className "text-base-content/50"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "From inputs" else "Override")]]]
                                 Html.div [prop.className "space-y-3 pt-3"; prop.children [
                                     Html.p [prop.className "text-xs break-words text-base-content/60"; prop.text source]
+                                    if s.Mapping.Confirmed && not (source.StartsWith("Derived")) then
+                                        Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Use inputs"; prop.onClick (fun _ -> useInputs s)]
                                     if editing then
                                         choice "Role" mapping.Role (["PDD";"X profile";"Y profile"] |> List.map (fun v -> v,v)) (fun v -> editMapping s (fun m -> {m with Role=v}))
                                         numeric "Spacing [mm / coordinate]" mapping.StepMm (fun v -> editMapping s (fun m -> {m with StepMm=v}))
@@ -384,7 +397,11 @@ let View () =
                                             Html.button [prop.className "btn btn-sm btn-primary"; prop.disabled busy; prop.text "Save override"; prop.onClick (fun _ -> saveMapping s mapping)]
                                             if draft.IsSome then Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Cancel"; prop.onClick (fun _ -> setDrafts (Map.remove id))]]]
                                     else
-                                        Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Spacing {format mapping.StepMm} mm · Origin {format mapping.OriginMm} mm · CAX {format mapping.CaxMm} mm"]
+                                        let mapped = physical s
+                                        let minimum = mapped |> List.minBy _.Position |> _.Position
+                                        let maximum = mapped |> List.maxBy _.Position |> _.Position
+                                        Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Spacing {Analysis.displayNumber mapping.StepMm} mm · Origin {Analysis.displayNumber mapping.OriginMm} mm · CAX {Analysis.displayNumber mapping.CaxMm} mm"]
+                                        Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Mapped range {Analysis.displayNumber minimum} to {Analysis.displayNumber maximum} mm · Stored coordinates {Analysis.displayNumber s.Curve.Points.Head.Position} to {Analysis.displayNumber (List.last s.Curve.Points).Position}"]
                                         Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Manual override"; prop.onClick (fun _ -> editMapping s (fun mapping -> mapping))]
                                     Html.p [prop.className "text-xs text-base-content/60"; prop.title s.Curve.Dataset.Id; prop.text $"{s.Curve.Points.Length} samples · {s.Curve.Dataset.Label}"]]]]]]]
                     Html.details [prop.className "analysis-methods"; prop.children [

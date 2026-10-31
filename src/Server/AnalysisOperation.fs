@@ -35,13 +35,13 @@ let private number (text: string) =
     if Double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, &value) && Double.IsFinite value then value
     else failwith $"Invalid numeric CSV value: {text}"
 
-/// Loads collected coordinates and uncertainties without silently projecting multidimensional scorers.
-let loadCurve settings id =
+/// Loads one collected curve using saved geometry or explicitly requesting input inference.
+let private loadCurveCore settings id useSavedMapping =
     try
         result {
             let! path = resolve settings id
             let mappingPath = path + ".analysis.json"
-            let mapping = if File.Exists mappingPath then Some(JsonSerializer.Deserialize<AnalysisMapping>(File.ReadAllText mappingPath)) else None
+            let mapping = if useSavedMapping && File.Exists mappingPath then Some(JsonSerializer.Deserialize<AnalysisMapping>(File.ReadAllText mappingPath)) else None
             let axis = mapping |> Option.map _.Axis |> Option.defaultValue 2
             if FileInfo(path).Length > 50000000L then
                 return! Error "This dataset is too large for 1D analysis. Use a dedicated 1D scorer."
@@ -70,6 +70,25 @@ let loadCurve settings id =
             return {Dataset={Id=id;Label=id.Replace("/dose_with_uncertainty.csv", "")}; Mapping=Some resolved; MappingSource=source; Points=points}
         }
     with ex -> Error $"Cannot load curve: {ex.Message}"
+
+/// Loads collected coordinates without silently projecting multidimensional scorers.
+let loadCurve settings id = loadCurveCore settings id true
+
+/// Restores successfully inferred input geometry while retaining a backup of any manual override.
+let resetMapping settings id =
+    try
+        result {
+            let! inferred = loadCurveCore settings id false
+            let! mapping = inferred.Mapping |> Result.requireSome "Input geometry is unavailable."
+            do! Result.requireTrue inferred.MappingSource mapping.Confirmed
+            let! _ = Analysis.validateMapping mapping
+            let! path = resolve settings id
+            let sidecar = path + ".analysis.json"
+            if File.Exists sidecar then
+                File.Move(sidecar, sidecar + "." + Guid.NewGuid().ToString("N") + ".bak")
+            return inferred
+        }
+    with ex -> Error $"Cannot restore input geometry: {ex.Message}"
 
 /// Saves validated physical mapping metadata beside an immutable collected CSV.
 let saveMapping settings (request: SaveAnalysisMapping) =

@@ -46,8 +46,14 @@ let mappingFromText suffix axis count text : Result<AnalysisMapping,string> =
         let dimension= [|"X";"Y";"Z"|][axis]
         if cylinder && axis<>2 then failwith "Radial/angular coordinates require a dedicated mapping."
         let half=number(ge+(if cylinder then "HL" else "HL"+dimension))
-        let bins=number(scorer+dimension+"Bins")
-        if bins<>float count then failwith "Input bin count differs from collected sample count."
+        let binKey=dimension+"Bins"
+        let bins=
+            if values.ContainsKey(scorer+binKey) then number(scorer+binKey)
+            elif values.ContainsKey(ge+binKey) then number(ge+binKey)
+            else 1.
+        if half<=0. || bins<=0. then failwith "Scoring dimensions and bin count must be positive."
+        if bins<>float count then
+            failwith $"Scorer {scorerComponent}: input {binKey}={bins:g}, collected samples={count}. Checked scorer bins, component bins and the default of 1."
         let step=2.*half/bins
         /// Accumulates translations only for unrotated parent chains.
         let rec translation level name =
@@ -86,7 +92,9 @@ let infer (settings:TsebtSettings) (id:string) axis count =
             let results=runIds |> Array.map(fun runId ->
                 let path=Path.Combine(settings.AppRoot,settings.Paths.Inputs,batch,runId+".txt")
                 if not(File.Exists path) then Error $"Generated input missing: {path}"
-                else mappingFromText suffix axis count (File.ReadAllText path))
+                else
+                    mappingFromText suffix axis count (File.ReadAllText path)
+                    |> Result.mapError (fun reason -> $"{runId}.txt: {reason}"))
             match results |> Array.tryPick(function Error e->Some e | _ ->None) with
             | Some message -> Error message
             | None ->

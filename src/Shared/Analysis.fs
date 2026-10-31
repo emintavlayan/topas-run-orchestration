@@ -13,6 +13,9 @@ type SymmetryDefinition = PointRatio | PointDifference | AreaDifference
 /// Checks finite numbers using APIs supported by both .NET and Fable.
 let private isFinite value = not (Double.IsNaN value || Double.IsInfinity value)
 
+/// Formats displayed analysis values to exactly one decimal place.
+let displayNumber (value: float) = sprintf "%.1f" value
+
 /// Returns the largest value when samples exist.
 let private tryMaximum values = values |> List.sortDescending |> List.tryHead
 
@@ -62,7 +65,10 @@ let normalizeCentralMean count cax (points: AnalysisPoint list) =
     result {
         do! Result.requireTrue "Central mean requires at least two samples." (count >= 2)
         do! Result.requireTrue $"Central mean requires {count} samples." (points.Length >= count)
-        let! _ = interpolate points cax |> Result.requireSome "CAX is outside the sampled profile."
+        let minimum = points |> List.minBy _.Position |> _.Position
+        let maximum = points |> List.maxBy _.Position |> _.Position
+        let message = $"CAX {displayNumber cax} mm is outside the mapped profile [{displayNumber minimum}, {displayNumber maximum}] mm. Check geometry source, origin and spacing in Settings."
+        let! _ = interpolate points cax |> Result.requireSome message
         let central = points |> List.sortBy (fun p -> abs (p.Position-cax), p.Position) |> List.take count
         do! Result.requireTrue "Central mean requires samples on both sides of CAX."
                 ((central |> List.exists (fun p -> p.Position < cax)) && (central |> List.exists (fun p -> p.Position > cax)))

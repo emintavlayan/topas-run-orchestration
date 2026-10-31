@@ -53,7 +53,10 @@ let private traces bands samples valueFormat (curve: Curve) =
             "x" ==> positions; "y" ==> (curve.Points |> List.map _.Dose |> List.toArray)
             "line" ==> createObj ["color" ==> stroke; "width" ==> 2.2; "dash" ==> (if curve.Role="Y profile" then "dash" else "solid")]
             "marker" ==> createObj ["color" ==> stroke; "size" ==> 5]
-            "hovertemplate" ==> ("%{x:.1f} mm · %{y:"+valueFormat+"}<extra>%{fullData.name}</extra>")
+            "text" ==> (curve.Points |> List.map (fun p ->
+                let dose = if valueFormat=".1e" then sprintf "%.1e" p.Dose else Analysis.displayNumber p.Dose
+                Analysis.displayNumber p.Position+" mm · "+dose) |> List.toArray)
+            "hovertemplate" ==> "%{text}<extra>%{fullData.name}</extra>"
             "showlegend" ==> false]
     |]
 

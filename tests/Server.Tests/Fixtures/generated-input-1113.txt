@@ -128,3 +128,19 @@ d:Ge/WaterTank/DPhi         = 360.0 deg
 d:Ge/WaterTank/TransX       = 0.0 cm
 d:Ge/WaterTank/TransY       = 0.0 cm
 d:Ge/WaterTank/TransZ       = 15.0 cm
+
+# Full Y profile at 1.3 cm depth, with the same 2 mm bin grid as X.
+s:Ge/YProfileFull/Parent = "WaterTank"
+s:Ge/YProfileFull/Type = "TsBox"
+d:Ge/YProfileFull/HLX = 0.1 cm
+d:Ge/YProfileFull/HLY = 30.0 cm
+d:Ge/YProfileFull/HLZ = 0.1 cm
+d:Ge/YProfileFull/TransX = 0.0 cm
+d:Ge/YProfileFull/TransY = 0.0 cm
+d:Ge/YProfileFull/TransZ = -13.7 cm
+s:Sc/YProfileFull/Quantity = "DoseToMedium"
+s:Sc/YProfileFull/Component = "YProfileFull"
+i:Sc/YProfileFull/XBins = 1
+i:Sc/YProfileFull/YBins = 300
+i:Sc/YProfileFull/ZBins = 1
+s:Sc/YProfileFull/OutputFile = "/srv/cluster/tsebt/runs/1113/seed11137_phsp21_yprofile"
