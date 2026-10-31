@@ -3,13 +3,16 @@ module Analysis
 open System
 open Shared
 
+/// Checks finite numbers using APIs supported by both .NET and Fable.
+let private isFinite value = not (Double.IsNaN value || Double.IsInfinity value)
+
 /// Returns the largest value when samples exist.
 let private tryMaximum values = values |> List.sortDescending |> List.tryHead
 
 /// Checks a physical mapping before calculating distances.
 let validateMapping (m: AnalysisMapping) =
     if not m.Confirmed then Error "Confirm the physical coordinate mapping first."
-    elif not ([m.StepMm; m.OriginMm; m.CaxMm] |> List.forall Double.IsFinite) || m.StepMm = 0.0 then Error "Mapping requires finite values and non-zero spacing."
+    elif not ([m.StepMm; m.OriginMm; m.CaxMm] |> List.forall isFinite) || m.StepMm = 0.0 then Error "Mapping requires finite values and non-zero spacing."
     elif m.Axis < 0 || m.Axis > 2 then Error "Choose X, Y or Z."
     elif not (List.contains m.Role ["PDD"; "X profile"; "Y profile"]) then Error "Choose a curve role."
     else Ok m
@@ -43,7 +46,7 @@ let normalize mode referencePosition (points: AnalysisPoint list) =
         | "Maximum" -> points |> List.map _.Dose |> tryMaximum
         | _ -> interpolate points referencePosition
     match denominator with
-    | Some d when Double.IsFinite d && d > 0.0 ->
+    | Some d when isFinite d && d > 0.0 ->
         Ok (points |> List.map (fun p -> {p with Dose=p.Dose*100.0/d; Uncertainty=p.Uncertainty*100.0/d}))
     | _ -> Error "Normalization reference is missing, outside the curve, or non-positive."
 

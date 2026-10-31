@@ -55,6 +55,15 @@ let ``Physical mapping requires explicit confirmation and finite spacing`` () =
     Assert.True(Result.isOk(validateMapping {mapping with Confirmed=true}))
     Assert.True(Result.isError(validateMapping {mapping with Confirmed=true;StepMm=0.}))
 
+/// Rejects non-finite physical coordinates and normalization references.
+[<Fact>]
+let ``Analysis rejects NaN and infinities across mappings and normalization`` () =
+    let mapping={Role="PDD";Axis=2;StepMm=2.;OriginMm=1.;CaxMm=0.;Confirmed=true}
+    for value in [System.Double.NaN; System.Double.PositiveInfinity; System.Double.NegativeInfinity] do
+        for invalid in [{mapping with StepMm=value}; {mapping with OriginMm=value}; {mapping with CaxMm=value}] do
+            Assert.True(Result.isError(validateMapping invalid))
+        Assert.True(Result.isError(normalize "CAX" 0. (curve [0.,value;1.,1.])))
+
 /// Checks generated-input inference against the actual current PDD and X-profile templates.
 [<Fact>]
 let ``Input geometry resolves current scorers and detects incompatible grids`` () =
