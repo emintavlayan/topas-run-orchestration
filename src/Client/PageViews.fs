@@ -71,7 +71,8 @@ let viewThemeSelector (selectedTheme: ThemeName) (dispatch: Msg -> unit) =
         prop.className "form-control"
         prop.children [
             Html.select [
-                prop.className "select select-bordered select-sm min-w-36"
+                prop.className "select select-bordered select-sm w-28"
+                prop.custom ("aria-label", "Theme")
                 prop.value (themeValue selectedTheme)
                 prop.onChange (fun (value: string) -> value |> themeFromValue |> SelectTheme |> dispatch)
                 prop.children [
@@ -88,32 +89,28 @@ let viewThemeSelector (selectedTheme: ThemeName) (dispatch: Msg -> unit) =
 /// Renders the top application navbar.
 let viewTopNavbar (model: Model) (dispatch: Msg -> unit) =
     Html.div [
-        prop.className "navbar rounded-box border border-base-300 bg-base-100 px-4 shadow-md"
+        prop.className "flex flex-wrap items-center gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3"
         prop.children [
             Html.div [
-                prop.className "navbar-start w-auto min-w-fit pr-4"
+                prop.className "shrink-0 pr-2"
                 prop.children [
                     Html.div [
                         prop.children [
                             Html.h1 [
-                                prop.className "text-lg font-bold tracking-tight md:text-xl"
-                                prop.text "Topas Run Orchestration"
+                                prop.className "text-sm font-semibold tracking-tight whitespace-nowrap"
+                                prop.text "TOPAS Run Orchestration"
                             ]
                         ]
                     ]
                 ]
             ]
             Html.div [
-                prop.className "navbar-center hidden flex-1 justify-start lg:flex"
+                prop.className "order-3 w-full overflow-x-auto lg:order-none lg:w-auto lg:flex-1"
                 prop.children [ viewWorkflowNavigation model dispatch ]
             ]
             Html.div [
-                prop.className "navbar-end flex-1 gap-3"
+                prop.className "ml-auto"
                 prop.children [
-                    Html.div [
-                        prop.className "flex lg:hidden"
-                        prop.children [ viewWorkflowNavigation model dispatch ]
-                    ]
                     viewThemeSelector model.SelectedTheme dispatch
                 ]
             ]

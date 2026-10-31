@@ -17,30 +17,43 @@ Input files are the archived generated inputs, not current templates. Missing in
 
 ## Curve processing
 
-Select multiple datasets and keep their full collection/scorer labels. PDD, X and Y are plotted separately. Normalization is raw summed Gy, individual maximum, CAX, or a specified physical position. CAX/reference interpolation is linear and never extrapolates. Missing or non-positive normalization references produce a visible error for the curve. Point markers show physical position and dose on hover. Plot bounds control the displayed physical interval; metrics use the complete curve.
+The workspace has a dataset sidebar and **Profiles / Metrics / Settings** tabs. The Profiles view overlays X/Y with solid/dashed lines and collection colours; X, Y and PDD filters isolate roles. Metrics use one dataset per row. Settings contains normalization, equations, plot controls and expandable geometry editors. Unconfirmed geometry triggers a link to Settings; errors remain visible above the active content.
 
+Profiles default to the arithmetic mean of the 10 samples nearest the specified CAX, with 5 samples also available. Equal-distance ties select the lower coordinate. The count must be available, CAX must lie inside the curve, and selected samples must include both sides of CAX. No partial window or fallback normalization is used. On the current 2 mm grid, the nearest 10 bins are centred at −9 through +9 mm. PDD independently defaults to maximum normalization. Alternative profile modes are maximum, CAX, at position and raw summed Gy; PDD offers maximum, at position and raw Gy. Normalization scales dose and absolute uncertainty by the same fixed factor.
+
+CAX/reference interpolation is linear and never extrapolates. Missing or non-positive normalization references produce a visible error for the curve. Sample tooltips show position and dose; visible sample markers are optional. Custom horizontal bounds control the displayed interval; the 95–105% toggle expands the relative-dose plateau. Metrics use the complete curve.
 Choose a selected dataset as reference to display differences against compatible-role curves at their sample positions, using linear interpolation only over overlapping coordinates. Differences are Gy or percentage points according to normalization. Export analysed curves and metric tables as CSV.
 
 Uncertainty bands scale the absolute dose uncertainty by the same fixed normalization factor. They do not include uncertainty in the normalization denominator or correlations. Metric uncertainties are not estimated. Raw summed Gy must not be interpreted as Gy/MU or an output factor without matching source-history/weight conventions.
 
 ## Metrics and conventions
 
-Defaults for both flatness and symmetry are ratio definitions with an ideal value of 100%. Each formula can be selected independently, and browser-local selections become the defaults on the next visit.
+Flatness and symmetry have independent named equation selectors in Settings. Both initially use the IEC/Elekta ratio. Browser-local defaults include both equation choices, profile/PDD normalization modes and central sample count; older generic ratio/difference defaults migrate to the corresponding equations.
 
-- Flatness ratio: `100 * Dmax / Dmin` within the evaluation region.
-- Symmetry ratio: `100 * max(D(x)/D(2*CAX-x), D(2*CAX-x)/D(x))` within the region.
-- Flatness difference: `100 * (Dmax-Dmin)/(Dmax+Dmin)`, ideal zero.
-- Symmetry absolute point difference: `100 * max(abs(D(x)-D(2*CAX-x)))/D(CAX)`, ideal zero.
+| Metric / selector | Equation |
+|---|---|
+| Flatness · IEC / Elekta — max/min | `100 * Dmax / Dmin` |
+| Flatness · Varian / IAEA — difference | `100 * (Dmax-Dmin)/(Dmax+Dmin)` |
+| Symmetry · IEC / Elekta — point ratio | `100 * max(D(x)/D(2*CAX-x), D(2*CAX-x)/D(x))` |
+| Symmetry · Varian — point difference | `100 * max(abs(D(x)-D(2*CAX-x)))/D(CAX)` |
+| Symmetry · IAEA — area difference | `100 * (AL-AR)/(AL+AR)` |
 
-No vendor name is assigned to these definitions. Primary software documentation describes the alternative conventions: [Pylinac profile metric definitions](https://pylinac.readthedocs.io/en/latest/topics/profiles.html)
+Sources:
 
+- [Standard Imaging DoseView manual](https://static.standardimaging.com/referenced-manuals/80614-11-DoseView-MNL.pdf), Table 16-2: Varian CAT difference, Elekta photon ratios, and separate Elekta electron definitions.
+- [IBA myQA Daily documentation](https://helpcenter.iba-dosimetry.com/hc/en-us/articles/28114820786844-myQA-Daily-2D-Detector-Array): IEC 60976 original mirrored-point ratio and max/min flatness.
+- [IAEA Radiation Oncology Physics handbook](https://international.anl.gov/training/materials/IAEA%20Publications/P1196_Handbook%20RADIATION%20ONCOLOGY%20PHYSICS.pdf), §6.9.1–6.9.2, equations 6.64–6.65: normalized flatness difference and signed area symmetry.
+
+These labels identify equations, not complete acceptance protocols. The common max/min IEC/Elekta flatness name refers to the photon convention. DoseView separately lists Elekta IEC electron max/CAX and Elekta USA electron twice-standard flatness, with different regions. Neither electron variant is implemented as a preset. The app does not verify protocol-specific acquisition depth, SSD, spatial averaging or reference dose and does not assign clinical tolerances.
+
+IAEA area symmetry integrates piecewise-linear dose from CAX to the nearest surrounding 50% **CAX-dose** crossings, independently of the point-metric region fraction. Positive means larger left area. Missing crossings or non-positive total area give an unavailable value.
 The default evaluation fraction is 0.8 of the symmetric half-field limited by the nearer 50% edge about the specified CAX. It equals the central 80% of FWHM for a centred field. The UI displays this convention; no automatic recentering hides offsets. Mirrored sample knots and region boundaries are interpolated before evaluating extrema. Non-positive denominators give unavailable values.
 
-Profile results include FWHM, centre from outer 50% crossings, and separate left/right 20–80% penumbras. PDD results include sampled dmax and the first distal R90/R80/R50 crossing after that maximum. Ranges are interpolated from dose samples and are not ionization I50 conversions. Insufficient depth coverage yields unavailable values. No smoothing is applied and sampling resolution remains visible. No clinical pass/fail tolerances are assigned.
+Profile results include FWHM, centre from outer 50% crossings, and separate left/right 20–80% penumbras. PDD results include sampled dmax and the first distal R90/R80/R50 crossing after that maximum. Ranges are interpolated from dose samples and are not ionization I50 conversions. Insufficient depth coverage yields unavailable values. No smoothing is applied and sampling resolution remains visible. No clinical pass/fail tolerances are assigned. Metric tables retain dataset rows with em dashes when profile calculations are unavailable.
 
 ## Validation
 
-`AnalysisTests.fs` checks analytic range crossings, 100% ideal profiles, exact 100.3% ratio examples, difference definitions, normalization and uncertainty scaling, unconfirmed mappings, current generated-input fixtures, incompatible bin counts, rotated-geometry fallback, server input lookup, saved overrides and dataset path isolation.
+`AnalysisTests.fs` checks analytic range crossings, 100% ideal profiles, exact 100.3% ratio examples, difference definitions, normalization and uncertainty scaling, five/ten-point CAX means, signed area integration, unconfirmed mappings, current generated-input fixtures, incompatible bin counts, rotated-geometry fallback, server input lookup, saved overrides and dataset path isolation.
 
 The fixture combines the current water-tank, PDD and X-profile templates from `emintavlayan/tsebt-monte-carlo-notes-and-decisions`, revision `5f0d278d4342a90778388197d418f9c96eb28c36`, substituting the output stem only.
 
@@ -55,7 +68,7 @@ Measured-data import, automatic slices from 3D scorers, gamma and uncertainty pr
 - Inferred X/Y positions accumulate unrotated geometry translations with CAX initialized to 0 mm. PDD requires a direct `G4_WATER` parent and measures depth from its negative-Z face. The parser does not derive SSD, field-size labels or beam-axis displacement from gantry/source definitions.
 - Explicit mapping validation requires a recognized role, axis 0–2, finite origin/CAX, finite non-zero spacing and Confirmed=true. It does not prove the mapping matches the physical experiment. Sidecar errors are surfaced as load errors; they are not silently replaced by inferred geometry.
 - [Analysis.fs](../src/Shared/Analysis.fs) uses linear segment crossings. For noisy/multi-peaked profiles, FWHM uses first/last 50% crossings; left penumbra uses the first qualifying crossing and right penumbra the last. There is no monotonic-fit/noise rejection. If two edges or a valid symmetric region are absent, the profile metric list can be empty rather than containing an unavailable row per metric.
-- [AnalysisViews.fs](../src/Client/AnalysisViews.fs) groups by the assigned role only. Matching role does not validate equal SSD, field size, depth, histories or weights. Differences use overlap without propagated uncertainty. Plot limits do not limit metrics; curve export includes all processed samples, not only the plotted interval. Numbers are formatted to six significant digits in the current exports.
-- Changing a mapping marks it unconfirmed until saved. API failures appear in the workspace; normalization failures appear beside the affected curve. Browser-local formula settings persist, but the selected curve list is not a saved analysis session.
+- [AnalysisViews.fs](../src/Client/AnalysisViews.fs) groups metrics and reference comparisons by the assigned role; its combined profile view overlays X/Y. [AnalysisPlot.fs](../src/Client/AnalysisPlot.fs) renders the responsive SVG overlay, grid and legend. Matching role does not validate equal SSD, field size, depth, histories or weights. Differences use overlap without propagated uncertainty. Plot limits do not limit metrics; curve export includes all processed samples, not only the plotted interval. Numbers are formatted to six significant digits in the current exports.
+- Changing a mapping marks it unconfirmed until saved. API failures appear in the workspace; normalization failures appear beside the affected curve. Browser-local formula and normalization settings persist, but the selected curve list is not a saved analysis session.
 
 For operator examples, see the [analysis guide](analysis-guide.md).

@@ -113,3 +113,35 @@ let ``Independent metric definition selection preserves requested baselines`` ()
     let values=metricsWithDefinitions "X profile" true false 0.8 0. (curve [-10.,0.;-8.,1.;0.,1.;8.,1.;10.,0.]) |> Map.ofList
     Assert.Equal(Some 100., values["Flatness (%)"])
     Assert.Equal(Some 0., values["Symmetry (%)"])
+
+/// Checks central normalization uses exactly the nearest five samples and scales uncertainty.
+[<Fact>]
+let ``Central mean uses five samples around the specified CAX`` () =
+    let points=curve [-3.,100.;-2.,10.;-1.,20.;0.,30.;1.,40.;2.,50.;3.,100.]
+    let normalized=assertOk(normalizeCentralMean 5 0. points)
+    Assert.Equal(100., normalized[3].Dose, 9)
+    Assert.Equal(100., normalized |> List.filter (fun p -> abs p.Position <= 2.) |> List.averageBy _.Dose, 9)
+    Assert.Equal(0.01*100./30., normalized[3].Uncertainty, 9)
+    let shifted=points |> List.map (fun p -> {p with Position=p.Position+7.})
+    Assert.Equal(100., (assertOk(normalizeCentralMean 5 7. shifted))[3].Dose, 9)
+
+/// Checks an even central sample count and refuses unsupported normalization windows.
+[<Fact>]
+let ``Central mean supports ten bin centres and rejects missing samples`` () =
+    let points=curve [for i in 0..9 -> -9.+2.*float i, float (i+1)]
+    let normalized=assertOk(normalizeCentralMean 10 0. points)
+    Assert.Equal(100., normalized |> List.averageBy _.Dose, 9)
+    Assert.True(Result.isError(normalizeCentralMean 10 0. (points |> List.take 9)))
+    Assert.True(Result.isError(normalizeCentralMean 5 20. points))
+    Assert.True(Result.isError(normalizeCentralMean 5 -9. points))
+    Assert.True(Result.isError(normalizeCentralMean 5 0. (curve [-2.,0.;-1.,0.;0.,0.;1.,0.;2.,0.])))
+
+/// Checks signed area symmetry integrates to the 50 percent CAX-dose edges independently of point region.
+[<Fact>]
+let ``IAEA area symmetry integrates each side of CAX`` () =
+    let points=curve [-4.,0.;0.,2.;2.,0.]
+    Assert.Equal(100./3., (areaSymmetry 0. points).Value, 9)
+    let values=metricsWithConventions "X profile" MaxMinRatio AreaDifference 0.8 0. points |> Map.ofList
+    Assert.Equal(100./3., values["Symmetry (%)"].Value, 9)
+    Assert.Equal(Some 0., areaSymmetry 0. (curve [-2.,0.;0.,2.;2.,0.]))
+    Assert.Equal(None, areaSymmetry 0. (curve [-1.,2.;0.,2.;1.,2.]))

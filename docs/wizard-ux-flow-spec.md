@@ -155,7 +155,7 @@ Collect:
 ## Error display behavior
 
 - Generate, Run and Collect show server/client errors in the wizard footer error alert area.
-- Analyse shows workspace/API errors above the selected datasets and normalization errors beside the affected curve.
+- Analyse shows workspace/API and per-curve normalization errors above the active tab.
 - Long error text is scroll-constrained.
 
 
@@ -165,7 +165,7 @@ Source: [AnalysisViews.fs](../src/Client/AnalysisViews.fs).
 
 Analyse does not use the wizard stepper or footer. It owns local React state and calls `listAnalysisDatasets`, `loadAnalysisCurve` and `saveAnalysisMapping`. It refreshes its dataset list on mount and provides an explicit Refresh action.
 
-The workspace has a scrollable dataset checklist, selected-curve mapping cards, normalization/formula/region/reference controls, separate plots by role, metric tables and CSV download links. API calls disable dataset toggling while loading. Mapping edits set Confirmed=false; saving re-enables the curve after server validation. Inferred supported mappings are already confirmed.
+The workspace has a filtered dataset sidebar and Profiles, Metrics and Settings tabs. Profiles overlays X/Y or isolates X, Y or PDD; Metrics uses dataset rows and metric columns. Settings holds independent profile/PDD normalization, 5/10-point central means, named equations, region/reference/plot controls and expandable mapping editors. CSV links remain in the toolbar. API calls disable dataset toggling while loading. Mapping edits set Confirmed=false; saving re-enables the curve after server validation. Inferred supported mappings are already confirmed.
 
 Formula dropdown selections are stored in browser localStorage. Other workspace selection state is not saved as an analysis session. Point tooltips are native SVG title tooltips; physical plot-limit inputs provide interval inspection. There is no drag-zoom or figure-export control.
 

@@ -2,6 +2,13 @@ module Analysis
 
 open System
 open Shared
+open FsToolkit.ErrorHandling
+
+/// Represents supported flatness equations independently of acquisition protocols.
+type FlatnessDefinition = MaxMinRatio | NormalizedDifference
+
+/// Represents supported symmetry equations independently of acquisition protocols.
+type SymmetryDefinition = PointRatio | PointDifference | AreaDifference
 
 /// Checks finite numbers using APIs supported by both .NET and Fable.
 let private isFinite value = not (Double.IsNaN value || Double.IsInfinity value)
@@ -49,6 +56,46 @@ let normalize mode referencePosition (points: AnalysisPoint list) =
     | Some d when isFinite d && d > 0.0 ->
         Ok (points |> List.map (fun p -> {p with Dose=p.Dose*100.0/d; Uncertainty=p.Uncertainty*100.0/d}))
     | _ -> Error "Normalization reference is missing, outside the curve, or non-positive."
+
+/// Normalizes to the arithmetic mean of the nearest N measured samples about CAX.
+let normalizeCentralMean count cax (points: AnalysisPoint list) =
+    result {
+        do! Result.requireTrue "Central mean requires at least two samples." (count >= 2)
+        do! Result.requireTrue $"Central mean requires {count} samples." (points.Length >= count)
+        let! _ = interpolate points cax |> Result.requireSome "CAX is outside the sampled profile."
+        let central = points |> List.sortBy (fun p -> abs (p.Position-cax), p.Position) |> List.take count
+        do! Result.requireTrue "Central mean requires samples on both sides of CAX."
+                ((central |> List.exists (fun p -> p.Position < cax)) && (central |> List.exists (fun p -> p.Position > cax)))
+        let mean = central |> List.averageBy _.Dose
+        do! Result.requireTrue "Central mean must be finite and positive." (isFinite mean && mean > 0.0)
+        return points |> List.map (fun p -> {p with Dose=p.Dose*100.0/mean; Uncertainty=p.Uncertainty*100.0/mean})
+    }
+
+/// Integrates a piecewise-linear profile between two physical coordinates.
+let private integrate left right points =
+    match interpolate points left, interpolate points right with
+    | Some a, Some b when left < right ->
+        [yield {Position=left;Dose=a;Uncertainty=0.0}
+         yield! points |> List.filter (fun p -> left < p.Position && p.Position < right)
+         yield {Position=right;Dose=b;Uncertainty=0.0}]
+        |> List.pairwise
+        |> List.sumBy (fun (p,q) -> (q.Position-p.Position)*(p.Dose+q.Dose)/2.0)
+        |> Some
+    | _ -> None
+
+/// Calculates signed IAEA area symmetry between CAX and its surrounding 50% CAX-dose edges.
+let areaSymmetry cax points =
+    interpolate points cax |> Option.bind (fun dose ->
+        if dose <= 0.0 then None else
+        let edges = crossings (0.5*dose) points
+        let left = edges |> List.filter (fun x -> x < cax) |> List.tryLast
+        let right = edges |> List.tryFind (fun x -> x > cax)
+        match left, right with
+        | Some l, Some r ->
+            match integrate l cax points, integrate cax r points with
+            | Some a, Some b when a+b > 0.0 -> Some (100.0*(a-b)/(a+b))
+            | _ -> None
+        | _ -> None)
 
 /// Calculates profile metrics with explicit region, centre and formula selection.
 let profileMetrics ratio region cax (points: AnalysisPoint list) =
@@ -103,3 +150,9 @@ let metricsWithDefinitions role flatnessRatio symmetryRatio region cax points =
     let baseMetrics=metrics role flatnessRatio region cax points
     let symmetry=metrics role symmetryRatio region cax points |> List.tryFind(fun (name,_)->name="Symmetry (%)")
     baseMetrics |> List.map(fun (name,value)-> if name="Symmetry (%)" then defaultArg symmetry (name,value) else name,value)
+
+/// Applies named equations while retaining the existing metric calculation entry points.
+let metricsWithConventions role flatness symmetry region cax points =
+    let values = metricsWithDefinitions role (flatness=MaxMinRatio) (symmetry=PointRatio) region cax points
+    if role="PDD" || symmetry<>AreaDifference then values
+    else values |> List.map (fun (name,value) -> if name="Symmetry (%)" then name,areaSymmetry cax points else name,value)
