@@ -10,7 +10,7 @@ export default function AnalysisChart({ title, data, layout, config }) {
 
     useEffect(() => {
         const node = container.current;
-        const state = { active: true, ready: false };
+        const state = { active: true, ready: false, revision: 0 };
         lifecycle.current = state;
         const observer = new ResizeObserver(() => {
             pending.current = pending.current.then(() => {
@@ -35,7 +35,12 @@ export default function AnalysisChart({ title, data, layout, config }) {
         pending.current = pending.current.then(async () => {
             if (!state.active) return;
             const font = { ...layout.font, color: getComputedStyle(node).color };
-            await Plotly.react(node, data, { ...layout, font }, config);
+            const chartLayout = { ...layout, font, datarevision: ++state.revision };
+            if (state.ready) {
+                await Plotly.react(node, data, chartLayout, config);
+            } else {
+                await Plotly.newPlot(node, data, chartLayout, config);
+            }
             state.ready = true;
             if (state.active) setError("");
         }).catch(reason => {

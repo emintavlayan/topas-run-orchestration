@@ -40,6 +40,7 @@ let private traces bands samples valueFormat (curve: Curve) =
             for direction in [-1.0;1.0] do
                 yield createObj [
                     "type" ==> "scatter"; "mode" ==> "lines"
+                    "uid" ==> (curve.Id+(if direction>0.0 then "/upper" else "/lower"))
                     "x" ==> positions
                     "y" ==> (curve.Points |> List.map (fun p -> p.Dose+direction*p.Uncertainty) |> List.toArray)
                     "line" ==> createObj ["width" ==> 0]
@@ -65,7 +66,7 @@ let private axis title valueFormat =
         "zerolinecolor" ==> "rgba(128,128,128,0.45)"; "zerolinewidth" ==> 1]
 
 /// Renders an interactive Plotly overlay with the run selector as its legend.
-let view (title: string) (context: string) (xTitle: string) (unitName: string) bands samples plateau (curves: Curve list) =
+let view (title: string) (context: string) (xTitle: string) (unitName: string) bands samples (curves: Curve list) =
     let points = curves |> List.collect _.Points
     if points.IsEmpty then
         Html.div [prop.className "analysis-empty"; prop.text "No curves in this view."]
@@ -73,11 +74,11 @@ let view (title: string) (context: string) (xTitle: string) (unitName: string) b
         let lower = points |> List.map (fun p -> p.Dose-(if bands then p.Uncertainty else 0.0)) |> List.min
         let upper = points |> List.map (fun p -> p.Dose+(if bands then p.Uncertainty else 0.0)) |> List.max
         let bottom = min 0.0 lower
-        let range = if plateau then [|95.0;105.0|] else [|bottom;max (bottom+1e-12) (upper+0.05*max 1e-12 (upper-bottom))|]
+        let range = [|bottom;max (bottom+1e-12) (upper+0.05*max 1e-12 (upper-bottom))|]
         let valueFormat = if unitName.Contains("Gy") && max (abs lower) (abs upper)<0.1 then ".1e" else ".1f"
         let first = points |> List.minBy _.Position |> _.Position
         let last = points |> List.maxBy _.Position |> _.Position
-        let revision = String.concat "|" [title;context;unitName;string plateau;string first;string last;curves |> List.map _.Id |> String.concat ";"]
+        let revision = String.concat "|" [title;context;unitName;string first;string last;curves |> List.map _.Id |> String.concat ";"]
         let layout = createObj [
             "autosize" ==> true; "showlegend" ==> false; "uirevision" ==> revision
             "dragmode" ==> "zoom"; "hovermode" ==> "closest"
@@ -96,5 +97,6 @@ let view (title: string) (context: string) (xTitle: string) (unitName: string) b
             "modeBarButtonsToRemove" ==> [|"select2d";"lasso2d"|]
             "toImageButtonOptions" ==> createObj ["format" ==> "png"; "filename" ==> ("topas-"+title); "scale" ==> 2]]
         createElement (chartComponent, createObj [
+            "key" ==> revision
             "title" ==> title; "data" ==> (curves |> List.toArray |> Array.collect (traces bands samples valueFormat))
             "layout" ==> layout; "config" ==> config])

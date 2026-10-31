@@ -123,7 +123,7 @@ let View () =
     let error,setError = React.useState("")
     let busy,setBusy = React.useState(false)
     let activeTab,setActiveTab = React.useState("Profiles")
-    let roleFilter,setRoleFilter = React.useState("X")
+    let roleFilter,setRoleFilter = React.useState("Profiles")
     let profileMode,setProfileMode = React.useState(fun () -> stored "topas.analysis.profileNorm" "Central mean" ["Central mean";"Maximum";"CAX";"At position";"None"])
     let pddMode,setPddMode = React.useState(fun () -> stored "topas.analysis.pddNorm" "Maximum" ["Maximum";"At position";"None"])
     let countText,setCountText = React.useState(fun () -> stored "topas.analysis.centralCount" "10" ["5";"10"])
@@ -135,7 +135,6 @@ let View () =
     let samples,setSamples = React.useState(false)
     let reference,setReference = React.useState("")
     let differences,setDifferences = React.useState(false)
-    let plateau,setPlateau = React.useState(false)
     let customBounds,setCustomBounds = React.useState(false)
     let xmin,setXmin = React.useState(-300.0)
     let xmax,setXmax = React.useState(300.0)
@@ -224,8 +223,6 @@ let View () =
         | Error message -> setError message })
     let prepared = selected |> List.map (fun s -> s,prepare profileMode pddMode count normPosition s)
     let processed = prepared |> List.choose (fun (s,r) -> match r with Ok points -> Some (s,points) | Error _ -> None)
-    let currentRole = if roleFilter="X" then "X profile" elif roleFilter="Y" then "Y profile" else "PDD"
-    let referenceCurve = processed |> List.tryFind (fun (s,_) -> label s.Curve.Dataset=reference && s.Mapping.Role=currentRole)
     /// Returns the active normalization for one curve role.
     let modeFor role = if role="PDD" then pddMode else profileMode
     /// Describes the applied normalization in exports and the toolbar.
@@ -245,16 +242,19 @@ let View () =
                  yield csvRow [s.Curve.Dataset.Label;s.Mapping.Role;name;value |> Option.map format |> Option.defaultValue ""
                                optionLabel flatness flatnessOptions;optionLabel symmetry symmetryOptions;format region;format s.Mapping.CaxMm]] |> String.concat "\n"
     let visible = processed |> List.filter (fun (s,_) ->
-        if roleFilter="X" then s.Mapping.Role="X profile"
+        if roleFilter="Profiles" then s.Mapping.Role="X profile" || s.Mapping.Role="Y profile"
+        elif roleFilter="X" then s.Mapping.Role="X profile"
         elif roleFilter="Y" then s.Mapping.Role="Y profile"
         else s.Mapping.Role="PDD")
-    let useDifference = differences && referenceCurve.IsSome
+    let referenceCurves = visible |> List.filter (fun (s,_) -> label s.Curve.Dataset=reference)
+    let useDifference = differences && not referenceCurves.IsEmpty
     let plotted = visible |> List.choose (fun (s,points) ->
         let values =
             if not useDifference then Some points
             else
-                match referenceCurve with
-                | Some (r,rp) when r.Mapping.Role=s.Mapping.Role && label s.Curve.Dataset<>reference ->
+                let matchingReference = referenceCurves |> List.tryFind (fun (r,_) -> r.Mapping.Role=s.Mapping.Role)
+                match matchingReference with
+                | Some (_,rp) when label s.Curve.Dataset<>reference ->
                     Some (points |> List.choose (fun p -> Analysis.interpolate rp p.Position |> Option.map (fun baseline -> {p with Dose=p.Dose-baseline;Uncertainty=0.0})))
                 | _ -> None
         values |> Option.map (fun p ->
@@ -270,7 +270,7 @@ let View () =
         Html.a [prop.className "btn btn-ghost btn-sm"; prop.download name
                 prop.href ("data:text/csv;charset=utf-8,"+Uri.EscapeDataString content); prop.text text]
     Html.div [prop.className "analysis-workspace"; prop.children [
-        Html.div [prop.className "analysis-runs"; prop.children [
+        Html.aside [prop.className "analysis-runs"; prop.children [
             Html.span [prop.className "text-sm font-semibold"; prop.text "Runs"]
             Html.div [prop.className "analysis-run-choices"; prop.children [
                 if runs.IsEmpty && not busy then Html.span [prop.className "text-sm text-base-content/60"; prop.text "No collected runs."]
@@ -315,26 +315,22 @@ let View () =
             if activeTab="Profiles" then
                 Html.div [prop.className "analysis-plot-toolbar"; prop.children [
                     Html.div [prop.className "join"; prop.children [
-                        for role in ["X";"Y";"PDD"] do
+                        for role in ["Profiles";"X";"Y";"PDD"] do
                             Html.button [prop.className (if roleFilter=role then "join-item btn btn-sm btn-primary" else "join-item btn btn-sm btn-ghost")
                                          prop.text role; prop.onClick (fun _ -> setRoleFilter role)]]]
                     Html.span [prop.className "text-xs text-base-content/60"; prop.text normalization]
-                    Html.div [prop.className "flex items-center gap-3"; prop.children [
-                        if referenceCurve.IsSome then checkbox "Difference" differences setDifferences
-                        if not raw && not useDifference then checkbox "95–105%" plateau setPlateau]]]]
+                    if not referenceCurves.IsEmpty then checkbox "Difference" differences setDifferences]]
                 if selected.IsEmpty then
                     Html.div [prop.className "analysis-empty"; prop.text "Select runs."]
                 elif customBounds && xmin>=xmax then
                     Html.div [prop.className "analysis-empty"; prop.text "Plot minimum must be below maximum. Change bounds in Settings."]
                 else
-                    let plotContext = String.concat "|" [normalization;format normPosition;reference;string customBounds;format xmin;format xmax]
+                    let plotContext = String.concat "|" [roleFilter;normalization;format normPosition;reference;string customBounds;format xmin;format xmax]
                     AnalysisPlot.view (if useDifference then "Reference difference" else roleFilter)
                         plotContext (if roleFilter="PDD" then "Depth [mm]" else "Position [mm]") unitName
-                        (bands && not useDifference) samples (plateau && not raw && not useDifference) plotted
+                        (bands && not useDifference) samples plotted
                 if useDifference then
-                    match referenceCurve with
-                    | Some (s,_) -> Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Reference: {label s.Curve.Dataset} · {s.Mapping.Role}"]
-                    | _ -> Html.none
+                    Html.p [prop.className "text-xs text-base-content/60"; prop.text ("Reference: "+reference)]
             elif activeTab="Metrics" then
                 Html.div [prop.className "space-y-6 p-4"; prop.children [
                     Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+format (100.0*region)+"%"])]
