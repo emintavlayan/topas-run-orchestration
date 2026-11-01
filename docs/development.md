@@ -18,7 +18,7 @@ Follow the [F# doctrine](safe-light-fsharp-doctrine.md): small named functions, 
 
 ## Local development
 
-Follow [local setup](onboarding.md). The regular watcher command is:
+Complete [installation and version selection](installation.md), then follow [local setup](onboarding.md). Run build commands from the repository root: `global.json` selects a stable .NET 8 SDK, `.node-version` requests Node 20 through fnm, and npm enforces Node 20/npm 10 in each client project. The regular watcher command is:
 
 ```powershell
 dotnet run --project .\Build.fsproj

@@ -6,6 +6,9 @@ Start with the failed tab or command. Keep the exact error, batch ID and collect
 
 | Symptom | Check / next action |
 |---|---|
+| Newer SDK/Node is installed but builds fail | Follow [version selection](installation.md): install the .NET 8 SDK alongside newer SDKs and run `fnm use 20` in the build terminal |
+| `EBADENGINE` during npm restore | This project requires Node 20/npm 10; check `node --version` and `npm --version` in that same terminal |
+| Published app requests `Microsoft.AspNetCore.App 8.0` | Install ASP.NET Core Runtime 8, even if a newer runtime is already present |
 | `git pull --ff-only` does not contain a feature | Check `git branch --show-current`; a feature must be on your tracking branch or merged into it |
 | Pull refuses local changes | Inspect `git status --short` and `git diff`; preserve or commit your work before changing branches |
 | Port 5000 returns only a status message | For development, open the Vite UI at port 8080; for production, verify the bundled `public/index.html` exists |

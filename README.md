@@ -19,15 +19,20 @@ Built with F# and SAFE for TSEBT commissioning.
 | I want to… | Read this |
 |---|---|
 | Use the installed application | [Daily workflow](docs/daily-workflow.md) |
-| Run a development copy | [Local setup](docs/onboarding.md) |
+| Install required versions and choose local/server hosting | [Installation manual](docs/installation.md) |
+| Run a development copy on Windows or Linux | [Local setup](docs/onboarding.md) |
 | Configure paths, nodes and TOPAS | [Configuration](docs/configuration.md) |
 | Update the Linux application from Windows | [Deployment](docs/how-to-deploy.md) |
+| Keep the app running on Ubuntu after logout/reboot | [systemd service setup](docs/systemd-deployment.md) |
+| Host the published app on Windows | [Windows deployment](docs/windows-deployment.md) |
 | Understand files, units and batch IDs | [Data and file reference](docs/data-reference.md) |
 | Compare curves and understand the formulas | [Analysis guide](docs/analysis-guide.md) |
 | Diagnose a failed step | [Troubleshooting](docs/troubleshooting.md) |
 | Change the code or verify it | [Developer guide](docs/development.md) |
 
 ## Already have the repository and server?
+
+Build tools: **.NET 8 SDK + Node 20/npm 10**. `global.json` selects .NET 8; `.node-version` requests Node 20 through your version manager. Newer installations can coexist. [One-time setup →](docs/installation.md)
 
 In **Windows PowerShell**, from the repository root on the branch containing the changes:
 

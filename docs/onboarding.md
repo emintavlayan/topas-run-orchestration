@@ -1,59 +1,66 @@
-# Local setup
+# Run locally
 
-[README](../README.md) · [All documentation](index.md)
+[README](../README.md) · [Installation](installation.md) · [All documentation](index.md)
 
-This guide starts a development copy on Windows. To update an installed Linux service, use [deployment](how-to-deploy.md).
+First time here? Complete [installation and version selection](installation.md) first. The steps below work on Windows and Linux; use the shell block matching your terminal.
 
-## Prerequisites
+## 1. Choose the data directory
 
-- Git, .NET 8 SDK compatible with [global.json](../global.json), Node.js and npm.
-- Node 20 is the established development environment; package versions are locked in the client lockfile and Paket lockfile.
-- A writable local folder for AppRoot.
-- TOPAS and Slurm are needed for real simulation execution, not for automated server tests or UI development.
+Use an absolute, writable folder outside the repository. Set these variables in the **same terminal** that will launch the app.
 
-## 1. Get the source
-
-```powershell
-git clone https://github.com/emintavlayan/topas-run-orchestration.git
-cd topas-run-orchestration
-dotnet tool restore
-dotnet paket restore
-```
-
-Check out the branch containing the features you intend to use. `git pull --ff-only` updates the current tracking branch; it does not bring an unmerged feature branch into `main`.
-
-## 2. Configure a local data root
-
-In the PowerShell session that will launch the app:
+**Windows — PowerShell**
 
 ```powershell
 $env:Tsebt__AppRoot = 'C:\Dev\tsebt-local-root'
+$env:Tsebt__Paths__Database = 'database/app.db'
 ```
 
-The server creates its required root folders at startup. Copy your TOPAS template components into that root's `templates` directory. Configure the remaining settings in [src/Server/appsettings.json](../src/Server/appsettings.json), or override them with environment variables. Use platform-native relative paths, including `database/app.db` on Linux. [Configuration reference →](configuration.md)
+**Linux/macOS — Bash or Zsh**
 
-## 3. Start the complete development app
-
-```powershell
-dotnet run --project .\Build.fsproj
+```bash
+export Tsebt__AppRoot="$HOME/tsebt-local-root"
+export Tsebt__Paths__Database='database/app.db'
 ```
 
-The default build target restores client npm dependencies, builds the solution, and starts the server and Fable/Vite watchers. Open [http://localhost:8080](http://localhost:8080) for the browser UI. The development API listens on port **5000**.
+**Fish**
 
-Keep this terminal open. Stop the development processes with Ctrl+C. A server-only `dotnet run --project .\src\Server` does not start the Vite browser UI.
-
-## 4. Verify without submitting simulations
-
-```powershell
-dotnet test .\tests\Server.Tests\Server.Tests.fsproj
+```fish
+set -gx Tsebt__AppRoot "$HOME/tsebt-local-root"
+set -gx Tsebt__Paths__Database 'database/app.db'
 ```
 
-Open all four tabs. Generate preview requires configured templates; Analyse needs existing collected outputs. Real Run submission requires the app to execute on a host with the configured Slurm/TOPAS tools and shared paths.
+The server creates the root subfolders and SQLite database at startup. Copy your TOPAS component files into `AppRoot/templates`, retaining their subfolders. Example components are available in the separate [TSEBT templates repository](https://github.com/emintavlayan/tsebt-monte-carlo-notes-and-decisions/tree/main/05-topas-templates); adapt their referenced phase-space/CAD paths for your environment. Those external assets are not included in this app.
 
-## 5. Build a production bundle
+[Configuration](configuration.md) explains the remaining paths and cluster settings. Base `src/Server/appsettings.json` contains an example cluster, not universal machine settings. Environment variables override it; environment-specific JSON files are not loaded by the current settings loader.
 
-```powershell
-dotnet run --project .\Build.fsproj -- Bundle
+## 2. Start the whole app
+
+From the repository root:
+
+```text
+fnm use 20
+dotnet run --project Build.fsproj
 ```
 
-This produces published server files and the browser bundle under `deploy`. For Windows-to-Linux deployment, use the deployment helper rather than copying Windows publish output directly. [Next: deploy the application →](how-to-deploy.md)
+The first start restores client dependencies, builds the solution and starts the server and Fable/Vite watchers. Open **[http://localhost:8080](http://localhost:8080)**. The development API runs on port **5000**.
+
+Keep the terminal open. Ctrl+C stops the development processes. Running only `src/Server/Server.fsproj` does not start the Vite UI.
+
+## 3. Check the setup
+
+- The four tabs open and the configured AppRoot is shown.
+- Generate lists the templates you copied.
+- Analyse finds results only after collected outputs and their archived inputs are available under AppRoot.
+- Run submission requires Slurm/TOPAS on the host executing the server; starting this UI on Windows does not submit through SSH to a Linux cluster.
+
+An empty data root is expected on a first installation. No simulations are bundled with the application. [First batch walkthrough](daily-workflow.md) · [Troubleshooting](troubleshooting.md)
+
+## 4. Build a production bundle
+
+```text
+dotnet run --project Build.fsproj -- Bundle
+```
+
+The `deploy` directory contains the published server plus `public/index.html` and browser assets. Keep both parts together. On a production host the UI is available at `/index.html` on the server's port; there is no Vite process or Node requirement.
+
+Choose a hosting route: [Linux/systemd](systemd-deployment.md), [Windows](windows-deployment.md), or [update the existing Linux service](how-to-deploy.md). For tests and code changes, see the [developer guide](development.md).

@@ -2,6 +2,8 @@
 
 [README](../README.md) · [All documentation](index.md)
 
+First installation? Start with the [installation manual](installation.md). This script updates an **existing Linux systemd installation**; use [initial Linux setup](systemd-deployment.md) to create it or [Windows deployment](windows-deployment.md) to host on Windows.
+
 ## Existing production service
 
 - SSH target: `fysiker@172.31.245.206` (`monte-carlo-01`)
@@ -39,10 +41,11 @@ Do not use `-SkipBuild` after changing client or shared source without rebuildin
 If Windows blocks local PowerShell script execution, run this invocation:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-app.ps1 -SkipBuild
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-app.ps1
 ```
 
-Prerequisites on Windows: .NET SDK, Node/npm for Bundle, OpenSSH (`ssh`, `scp`), and `tar`.
+Prerequisites on the Windows build machine: **.NET 8 SDK, Node 20/npm 10**, OpenSSH (`ssh`, `scp`), and `tar`. Select Node 20 in the same terminal before invoking the script. [Side-by-side tool installation](installation.md) explains fnm and `global.json`.
+The Linux target needs **ASP.NET Core Runtime 8**; it does not need Node or an SDK. The script does not install runtimes, create the service or configure a new cluster.
 SSH or sudo may request your existing passwords interactively; the script stores no credentials.
 
 ## Deployment behavior
@@ -71,7 +74,7 @@ A service restart interrupts any in-progress web operation, including Collect.
 
 ## Verification
 
-After the script reports `Deployment verified`, refresh the browser with Ctrl+F5.
+After the script reports `Deployment verified`, open `/index.html` on the app's address and refresh the browser with Ctrl+F5. The default health URL `/` checks server responsiveness; it is not a full browser/API workflow test.
 For multi-scorer collection, inspect a batch preview and verify the discovered scorer names.
 
 Additional checks from PowerShell:
