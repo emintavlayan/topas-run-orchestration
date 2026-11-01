@@ -139,8 +139,6 @@ let View () =
     let region,setRegion = React.useState(0.8)
     let bands,setBands = React.useState(true)
     let samples,setSamples = React.useState(false)
-    let reference,setReference = React.useState("")
-    let differences,setDifferences = React.useState(false)
     let customBounds,setCustomBounds = React.useState(false)
     let xmin,setXmin = React.useState(-300.0)
     let xmax,setXmax = React.useState(300.0)
@@ -177,9 +175,6 @@ let View () =
         setSelectedRuns (fun values -> values |> List.filter ((<>) runId))
         setSelected (fun values -> values |> List.filter (fun s -> label s.Curve.Dataset<>runId))
         discardRunDrafts runId
-        if reference=runId then
-            setReference ""
-            setDifferences false
     /// Loads every scorer from exactly one collection of the selected run.
     let loadRun runId collectionId = run (async {
         let outputs = collections runId datasets |> List.tryFind (fun (key,_) -> key=collectionId) |> Option.map snd |> Option.defaultValue []
@@ -263,28 +258,17 @@ let View () =
         elif roleFilter="X" then s.Mapping.Role="X profile"
         elif roleFilter="Y" then s.Mapping.Role="Y profile"
         else s.Mapping.Role="PDD")
-    let referenceCurves = visible |> List.filter (fun (s,_) -> label s.Curve.Dataset=reference)
-    let useDifference = differences && not referenceCurves.IsEmpty
-    let plotted = visible |> List.choose (fun (s,points) ->
-        let values =
-            if not useDifference then Some points
-            else
-                let matchingReference = referenceCurves |> List.tryFind (fun (r,_) -> r.Mapping.Role=s.Mapping.Role)
-                match matchingReference with
-                | Some (_,rp) when label s.Curve.Dataset<>reference ->
-                    Some (points |> List.choose (fun p -> Analysis.interpolate rp p.Position |> Option.map (fun baseline -> {p with Dose=p.Dose-baseline;Uncertainty=0.0})))
-                | _ -> None
-        values |> Option.map (fun p ->
-            let curve: AnalysisPlot.Curve =
-                {Id=s.Curve.Dataset.Id; Label=label s.Curve.Dataset; Role=s.Mapping.Role
-                 Points=p |> List.filter (fun p -> not customBounds || (p.Position>=xmin && p.Position<=xmax))}
-            curve))
+    let plotted = visible |> List.map (fun (s,points) ->
+        let curve: AnalysisPlot.Curve =
+            {Id=s.Curve.Dataset.Id; Label=label s.Curve.Dataset; Role=s.Mapping.Role
+             Points=points |> List.filter (fun p -> not customBounds || (p.Position>=xmin && p.Position<=xmax))}
+        curve)
     let normalization = modeLabel (if roleFilter="PDD" then "PDD" else "X profile")
     let raw = modeFor (if roleFilter="PDD" then "PDD" else "X profile")="None"
-    let unitName = if raw && useDifference then "Δ dose [Gy]" elif raw then "Dose [Gy]" elif useDifference then "Δ dose [pp]" else "Relative dose [%]"
+    let unitName = if raw then "Dose [Gy]" else "Relative dose [%]"
     /// Renders a CSV download for currently processed datasets.
     let download (name: string) (text: string) (content: string) =
-        Html.a [prop.className "btn btn-ghost btn-sm"; prop.download name
+        Html.a [prop.className "analysis-button"; prop.download name
                 prop.href ("data:text/csv;charset=utf-8,"+Uri.EscapeDataString content); prop.text text]
     Html.div [prop.className "analysis-workspace"; prop.children [
         Html.aside [prop.className "analysis-runs"; prop.children [
@@ -315,7 +299,7 @@ let View () =
             Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text (if busy then "Loading…" else "Refresh"); prop.onClick (fun _ -> refresh())]
             if not selectedRuns.IsEmpty then
                 Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text "Clear"
-                             prop.onClick (fun _ -> setSelectedRuns (fun _ -> []); setSelected (fun _ -> []); setDrafts (fun _ -> Map.empty); setReference ""; setDifferences false)]]]
+                             prop.onClick (fun _ -> setSelectedRuns (fun _ -> []); setSelected (fun _ -> []); setDrafts (fun _ -> Map.empty))]]]
         Html.div [prop.className "analysis-main"; prop.children [
             Html.div [prop.className "analysis-toolbar"; prop.children [
                 Html.div [prop.className "flex gap-5"; prop.children [for title in ["Profiles";"Metrics";"Settings"] -> tab activeTab title setActiveTab]]
@@ -338,19 +322,16 @@ let View () =
                         for role in ["Profiles";"X";"Y";"PDD"] do
                             Html.button [prop.className (if roleFilter=role then "join-item btn btn-sm btn-primary" else "join-item btn btn-sm btn-ghost")
                                          prop.text role; prop.onClick (fun _ -> setRoleFilter role)]]]
-                    Html.span [prop.className "text-xs text-base-content/60"; prop.text normalization]
-                    if not referenceCurves.IsEmpty then checkbox "Difference" differences setDifferences]]
+                    Html.span [prop.className "text-xs text-base-content/60"; prop.text normalization]]]
                 if selected.IsEmpty then
                     Html.div [prop.className "analysis-empty"; prop.text "Select runs."]
                 elif customBounds && xmin>=xmax then
                     Html.div [prop.className "analysis-empty"; prop.text "Plot minimum must be below maximum. Change bounds in Settings."]
                 else
-                    let plotContext = String.concat "|" [roleFilter;normalization;format normPosition;reference;string customBounds;format xmin;format xmax]
-                    AnalysisPlot.view (if useDifference then "Reference difference" else roleFilter)
+                    let plotContext = String.concat "|" [roleFilter;normalization;format normPosition;string customBounds;format xmin;format xmax]
+                    AnalysisPlot.view roleFilter
                         plotContext (if roleFilter="PDD" then "Depth [mm]" else "Position [mm]") unitName
-                        (bands && not useDifference) samples plotted
-                if useDifference then
-                    Html.p [prop.className "text-xs text-base-content/60"; prop.text ("Reference: "+reference)]
+                        bands samples plotted
             elif activeTab="Metrics" then
                 Html.div [prop.className "space-y-6 p-4"; prop.children [
                     Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+Analysis.displayNumber (100.0*region)+"%"])]
@@ -371,15 +352,14 @@ let View () =
                         choice "Flatness" flatness flatnessOptions (persist "topas.analysis.formula" setFlatness)
                         choice "Symmetry" symmetry symmetryOptions (persist "topas.analysis.symmetry" setSymmetry)
                         numeric "Point-metric region [%]" (region*100.0) (fun v -> if v>0.0 && v<=100.0 then setRegion (v/100.0))]]
-                    Html.section [prop.className "analysis-settings-card"; prop.children [
+                    Html.section [prop.className "analysis-settings-card analysis-plot-settings"; prop.children [
                         Html.h3 "Plot"
-                        checkbox "Uncertainty band" bands setBands
-                        checkbox "Sample markers" samples setSamples
-                        checkbox "Custom horizontal range" customBounds setCustomBounds
+                        Html.div [prop.className "analysis-plot-options"; prop.children [
+                            checkbox "Uncertainty band" bands setBands
+                            checkbox "Sample markers" samples setSamples
+                            checkbox "Custom horizontal range" customBounds setCustomBounds]]
                         if customBounds then
-                            Html.div [prop.className "grid grid-cols-2 gap-3"; prop.children [numeric "Minimum [mm]" xmin setXmin; numeric "Maximum [mm]" xmax setXmax]]
-                        choice "Difference reference" reference (("","None") :: (selectedRuns |> List.map (fun runId -> runId,runId)))
-                            (fun value -> setReference value; setDifferences (value<>""))]]
+                            Html.div [prop.className "grid grid-cols-2 gap-3"; prop.children [numeric "Minimum [mm]" xmin setXmin; numeric "Maximum [mm]" xmax setXmax]]]]
                     Html.section [prop.className "analysis-settings-card analysis-geometry"; prop.children [
                         Html.h3 "Geometry"
                         if selected.IsEmpty then Html.p [prop.className "text-sm text-base-content/60"; prop.text "No loaded curves."]
@@ -392,26 +372,27 @@ let View () =
                             Html.details [prop.className "analysis-mapping"; prop.children [
                                 Html.summary [prop.children [
                                     Html.span $"{scorerLabel s.Curve.Dataset} · {s.Mapping.Role}"
-                                    Html.span [prop.className "text-base-content/50"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "From inputs" else "Override")]]]
-                                Html.div [prop.className "space-y-3 pt-3"; prop.children [
+                                    Html.span [prop.className "analysis-mapping-status"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "From inputs" else "Override")]]]
+                                Html.div [prop.className "analysis-mapping-body"; prop.children [
                                     Html.p [prop.className "text-xs break-words text-base-content/60"; prop.text source]
                                     if s.Mapping.Confirmed && not (source.StartsWith("Derived")) then
-                                        Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Use inputs"; prop.onClick (fun _ -> useInputs s)]
+                                        Html.button [prop.className "analysis-button"; prop.disabled busy; prop.text "Restore from inputs"; prop.onClick (fun _ -> useInputs s)]
                                     if editing then
-                                        choice "Role" mapping.Role (["PDD";"X profile";"Y profile"] |> List.map (fun v -> v,v)) (fun v -> editMapping s (fun m -> {m with Role=v}))
-                                        numeric "Spacing [mm / coordinate]" mapping.StepMm (fun v -> editMapping s (fun m -> {m with StepMm=v}))
-                                        numeric "Origin [mm]" mapping.OriginMm (fun v -> editMapping s (fun m -> {m with OriginMm=v}))
-                                        numeric "CAX [mm]" mapping.CaxMm (fun v -> editMapping s (fun m -> {m with CaxMm=v}))
-                                        Html.div [prop.className "flex gap-2"; prop.children [
-                                            Html.button [prop.className "btn btn-sm btn-primary"; prop.disabled busy; prop.text "Save override"; prop.onClick (fun _ -> saveMapping s mapping)]
-                                            if draft.IsSome then Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Cancel"; prop.onClick (fun _ -> setDrafts (Map.remove id))]]]
+                                        Html.div [prop.className "analysis-mapping-fields"; prop.children [
+                                            choice "Role" mapping.Role (["PDD";"X profile";"Y profile"] |> List.map (fun v -> v,v)) (fun v -> editMapping s (fun m -> {m with Role=v}))
+                                            numeric "Spacing [mm / coordinate]" mapping.StepMm (fun v -> editMapping s (fun m -> {m with StepMm=v}))
+                                            numeric "Origin [mm]" mapping.OriginMm (fun v -> editMapping s (fun m -> {m with OriginMm=v}))
+                                            numeric "CAX [mm]" mapping.CaxMm (fun v -> editMapping s (fun m -> {m with CaxMm=v}))]]
+                                        Html.div [prop.className "analysis-actions"; prop.children [
+                                            Html.button [prop.className "analysis-button"; prop.disabled busy; prop.text "Save values"; prop.onClick (fun _ -> saveMapping s mapping)]
+                                            if draft.IsSome then Html.button [prop.className "analysis-button"; prop.disabled busy; prop.text "Cancel"; prop.onClick (fun _ -> setDrafts (Map.remove id))]]]
                                     else
                                         let mapped = physical s
                                         let minimum = mapped |> List.minBy _.Position |> _.Position
                                         let maximum = mapped |> List.maxBy _.Position |> _.Position
                                         Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Spacing {Analysis.displayNumber mapping.StepMm} mm · Origin {Analysis.displayNumber mapping.OriginMm} mm · CAX {Analysis.displayNumber mapping.CaxMm} mm"]
                                         Html.p [prop.className "text-xs text-base-content/60"; prop.text $"Mapped range {Analysis.displayNumber minimum} to {Analysis.displayNumber maximum} mm · Stored coordinates {Analysis.displayNumber s.Curve.Points.Head.Position} to {Analysis.displayNumber (List.last s.Curve.Points).Position}"]
-                                        Html.button [prop.className "btn btn-sm btn-ghost"; prop.disabled busy; prop.text "Manual override"; prop.onClick (fun _ -> editMapping s (fun mapping -> mapping))]
+                                        Html.button [prop.className "analysis-button"; prop.disabled busy; prop.text "Enter manual values"; prop.onClick (fun _ -> editMapping s (fun mapping -> mapping))]
                                     Html.p [prop.className "text-xs text-base-content/60"; prop.title s.Curve.Dataset.Id; prop.text $"{s.Curve.Points.Length} samples · {s.Curve.Dataset.Label}"]]]]]]]
                     Html.details [prop.className "analysis-methods"; prop.children [
                         Html.summary "Equations and references"

@@ -50,7 +50,7 @@ Those tests mock service commands and use temporary folders. They do not contact
 After tests and Bundle:
 
 1. Verify Generate, Run and Collect navigation/previews with representative data.
-2. Verify Analyse selection, automatic and explicit mappings, each normalization (including 5/10-point central means), all metric equations, reference differences and exports.
+2. Verify Analyse selection, direct profile overlays, automatic and explicit mappings, outlined Settings actions, each normalization (including 5/10-point central means), all metric equations and exports.
 3. Check mobile/narrow layout, themes, long paths and visible error states.
 4. For cluster changes, validate real Slurm/TOPAS behavior separately; unit tests do not execute the simulation engine.
 

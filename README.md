@@ -10,7 +10,7 @@ Built with F# and SAFE for TSEBT commissioning.
 | **Generate** | Select templates, nodes and phase-space files; review the input | One batch ID and a generated TOPAS input per node/phase-space pair |
 | **Run** | Select that batch, check preflight, submit | Per-node Slurm arrays and job IDs |
 | **Collect** | Check completed CSVs/logs; exclude failed nodes or phase spaces if needed | Separate merged dose and uncertainty files for every discovered scorer |
-| **Analyse** | Select collected curves, check detected geometry, choose normalization and metrics | PDD/profile overlays, reference differences, R50 and profile metrics; CSV exports |
+| **Analyse** | Select collected curves, check detected geometry, choose normalization and metrics | PDD/profile overlays, R50 and profile metrics; CSV exports |
 
 **Example:** 7 nodes × 22 phase-space files = 154 runs. Each run can produce `_pdd`, `_xprofile`, `_yprofile`, or any future suffix. One Collect action processes each scorer separately. [Walk through a batch →](docs/daily-workflow.md)
 

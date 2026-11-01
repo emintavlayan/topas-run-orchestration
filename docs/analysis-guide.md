@@ -8,7 +8,7 @@ Analyse reads collected results directly from the server.
 
 1. Open **Analyse**. Select run IDs in the left sidebar. Each run's colour identifies its curves; there is no separate plot legend. Expand a run (for example **1114**) to see all collection folders, newest first; the latest is selected by default. Use **Refresh** to discover new collections.
 2. **Profiles** shows X and Y together: X is solid, Y is dashed. Use **X**, **Y** or **PDD** to isolate a role. Choosing a run loads every scorer from one collection together; changing the collection replaces that run’s curves. Collections are never mixed automatically.
-3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; enter a manual override and **Save override** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry. A saved override takes precedence over input inference. Use **Settings → Geometry → Use inputs** to restore input-derived geometry; the existing override is backed up only after inference succeeds.
+3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; choose **Enter manual values**, edit the mapping, then **Save values** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry. A saved override takes precedence over input inference. Use **Settings → Geometry → Restore from inputs** to restore input-derived geometry; the existing override is backed up only after inference succeeds.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
 5. Open **Metrics** for one row per dataset and one column per metric.
 6. Choose **Export Curves** or **Export Metrics** from the toolbar.
@@ -47,9 +47,9 @@ These names identify equations. They do not select a complete vendor acceptance 
 
 ## Plot and results
 
-The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing runs, collections, view, normalization, reference or bounds initializes a fresh chart. Run colours in the sidebar identify curves; X is solid and Y is dashed. No bottom legend is shown.
+The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing runs, collections, view, normalization or bounds initializes a fresh chart. Run colours in the sidebar identify curves; X is solid and Y is dashed. No bottom legend is shown.
 
-**Settings → Plot** controls uncertainty bands, sample markers, horizontal bounds and the reference run. Each displayed curve uses the reference scorer with the same role, including both axes in **Profiles**. Choosing a reference enables the **Difference** view; switch it off in the plot toolbar to return to overlays. Only roles with an available reference are plotted in Difference. Differences use only overlapping coordinates and are in Gy or percentage points.
+**Settings → Plot** controls uncertainty bands, sample markers and horizontal bounds. Selected runs are overlaid directly in Profiles, X, Y and PDD views.
 
 Metrics always use the complete curve. Plot bounds and interactive zoom do not limit metrics or exports. FWHM displays whole millimetres. Other metrics, axis labels and hover values display one decimal place; raw-dose plots below 0.1 Gy use scientific notation. CSV exports retain six significant digits. Missing values appear as **—**.
 
@@ -65,6 +65,8 @@ R50 is dose-based, not an I50 conversion. No smoothing or peak fitting is applie
 
 Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export Curves includes role, normalization, central sample count and CAX; Export Metrics includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
 
-Supported now: collected 1D scorers, generated-input geometry inference, explicit overrides, overlays, differences, metrics and CSV export. Multidimensional scorers require explicit extraction. Measured-data import, 3D slicing, gamma and derived-metric uncertainty propagation remain future work.
+Supported now: collected 1D scorers, generated-input geometry inference, explicit overrides, overlays, metrics and CSV export. Multidimensional scorers require explicit extraction. Measured-data import, 3D slicing, gamma and derived-metric uncertainty propagation remain future work.
 
-For an incorrectly saved `default` mapping, choose **Settings → Geometry → run/default → Use inputs**. Current manifests identify the input scorer by its exact source CSV path, including unsuffixed outputs. Restoring inputs fails explicitly if no unique input scorer matches; the program does not infer a role solely from sample count.
+For an incorrectly saved `default` mapping, choose **Settings → Geometry → run/default → Restore from inputs**. Current manifests identify the input scorer by its exact source CSV path, including unsuffixed outputs. Restoring inputs fails explicitly if no unique input scorer matches; the program does not infer a role solely from sample count.
+
+Settings separates Normalization, Metrics, Plot and Geometry into bordered sections. Geometry entries expand independently. Action buttons are outlined: **Enter manual values**, **Save values**, **Cancel** and **Restore from inputs**.
