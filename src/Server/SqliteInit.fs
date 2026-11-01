@@ -180,6 +180,15 @@ let initialize (settings: TsebtSettings) : Result<string, string> =
 );"""
 
         ensureRunFoundationColumns connection
+        executeNonQuery connection """CREATE TABLE IF NOT EXISTS run_node_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  seed_base TEXT NOT NULL,
+  node_name TEXT NOT NULL,
+  job_id TEXT NOT NULL UNIQUE,
+  manifest_path TEXT NOT NULL,
+  submitted_at TEXT NOT NULL
+);"""
+        executeNonQuery connection "CREATE INDEX IF NOT EXISTS idx_run_node_submissions_batch ON run_node_submissions(seed_base);"
         ensureCollectFoundationColumns connection
         ensureGeneratedBatchCollectionsTable connection
         backfillExistingCollectionHistory connection

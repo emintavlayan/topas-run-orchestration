@@ -284,7 +284,64 @@ type AnalysisCurve = { Dataset: AnalysisDataset; Mapping: AnalysisMapping option
 /// Represents a request to save a physical mapping beside a collected curve.
 type SaveAnalysisMapping = { Id: string; Mapping: AnalysisMapping }
 
+/// Represents the observed state of a single PHSP task.
+[<RequireQualifiedAccess>]
+type RunTaskState = NotSubmitted | Pending | Running | Suspended | Completed | Failed | Unknown
+
+/// Represents one manifest task and its latest scheduler or log evidence.
+type RunControlTask = {
+    RunId: string
+    PhaseSpaceIndex: string
+    NodeName: string
+    TaskId: int option
+    SlurmTaskId: string option
+    State: RunTaskState
+    Reason: string option
+    StartedAt: string option
+    FinishedAt: string option
+    ElapsedSeconds: float option
+    LogAvailable: bool
+}
+
+/// Represents node utilization and progress for the selected batch.
+type RunControlNode = {
+    NodeName: string
+    Tasks: RunControlTask list
+    CpuPercent: float option
+    MemoryPercent: float option
+    MemoryUsedGb: float option
+    MemoryTotalGb: float option
+    TelemetryAt: string option
+    TelemetryError: string option
+    CompletedCount: int
+    RunningCount: int
+    FailedCount: int
+    ElapsedSeconds: float option
+    RemainingSeconds: float option
+    EstimateNote: string
+}
+
+/// Represents a cached read-only view of one simulation batch.
+type RunControlSnapshot = {
+    SeedBase: string
+    CapturedAt: string
+    Nodes: RunControlNode list
+    TotalCount: int
+    CompletedCount: int
+    RunningCount: int
+    FailedCount: int
+    RemainingSeconds: float option
+    EstimatedFinishAt: string option
+    Warnings: string list
+}
+
+/// Identifies a generated run whose log tail may be inspected.
+type RunControlLogRequest = { SeedBase: string; RunId: string }
+
 type ITopasApi = {
+    getRunControlBatches: unit -> Async<Result<RunBatchSummary list, string>>
+    getRunControl: string -> Async<Result<RunControlSnapshot, string>>
+    getRunControlLog: RunControlLogRequest -> Async<Result<string, string>>
     listAnalysisDatasets: unit -> Async<Result<AnalysisDataset list, string>>
     loadAnalysisCurve: string -> Async<Result<AnalysisCurve, string>>
     saveAnalysisMapping: SaveAnalysisMapping -> Async<Result<unit, string>>

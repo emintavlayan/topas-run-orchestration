@@ -572,6 +572,11 @@ let submitRun (settings: TsebtSettings) (request: SubmitRunRequest) : Result<Sub
                                 let idsText = String.concat "," submittedJobIds
                                 $"{err} Submitted job ids before failure: {idsText}")
 
+                    let earlierIds=String.concat "," submittedJobIds
+                    do!
+                        RunControlStore.recordSubmission settings request.SeedBase batch.NodeName slurmJobId batch.ManifestPath
+                        |> Result.mapError (fun error -> $"{error}. Slurm accepted job {slurmJobId}; inspect Run Control before taking further action. Earlier accepted jobs: {earlierIds}")
+
                     return!
                         submitNodeBatches
                             rest

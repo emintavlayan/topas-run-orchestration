@@ -10,6 +10,7 @@
 | Server | Configuration, files, SQLite, TOPAS/Slurm orchestration | [Server.fs](../src/Server/Server.fs) |
 | Client | Elmish wizard state, React analysis workspace, plotting | [Index.fs](../src/Client/Index.fs), [AnalysisViews.fs](../src/Client/AnalysisViews.fs) |
 | Collection | Discovery, health, merging and statistics | [CollectPlanning.fs](../src/Server/CollectPlanning.fs), [CollectPreflight.fs](../src/Server/CollectPreflight.fs), [CollectOperation.fs](../src/Server/CollectOperation.fs) |
+| Run monitoring | Pure state/ETA parsing, SQLite task identity, bounded Slurm/procfs probes and shared snapshot cache | [RunControlDomain.fs](../src/Server/RunControlDomain.fs), [RunControlOperation.fs](../src/Server/RunControlOperation.fs), [RunControlViews.fs](../src/Client/RunControlViews.fs) |
 | Geometry inference | Generated-input parameter parsing and agreement checks | [AnalysisInput.fs](../src/Server/AnalysisInput.fs) |
 | Analysis storage | Dataset discovery, CSV reading and sidecar overrides | [AnalysisOperation.fs](../src/Server/AnalysisOperation.fs) |
 | Deployment | Windows packaging and Linux service replacement | [deploy-app.ps1](../scripts/deploy-app.ps1), [deploy-app.sh](../scripts/deploy-app.sh) |

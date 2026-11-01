@@ -94,7 +94,7 @@ Each node Slurm script:
 4. Build per-node manifests and scripts.
 5. For each node in sequence, write its manifest/script.
 6. Immediately execute `sbatch` for that node before proceeding to the next.
-7. Parse each Slurm job id from output (`Submitted batch job 12345`).
+7. Parse each Slurm job id from output (`Submitted batch job 12345`) and immediately record that node/job/manifest in `run_node_submissions`.
 8. Update SQLite batch metadata (`run_status`, `slurm_job_id`, paths, timestamp), where `slurm_job_id` stores comma-separated ids.
 9. Update generated runs status to `Submitted`.
 
@@ -114,6 +114,6 @@ Source: [RunOperation.fs](../src/Server/RunOperation.fs).
 - CSV collision checking specifically tests `{OutputFilePath}.csv`; it does not discover all suffixed scorer CSVs like Collect does. Do not interpret it as a general scorer-output overwrite detector.
 - There is no scheduler availability/executable/partition test in preflight. Process launch and `sbatch` report those errors at submission.
 - Per-node files are written and jobs submitted sequentially. A failure does not cancel earlier accepted jobs. An unparseable success response can also mean a job exists despite an application error.
-- Batch/run submission metadata is updated after all node submissions succeed. Stored primary paths identify the first node; the response also includes the returned job ID list.
-- This module records submission, not live scheduler progress; no automatic polling updates Running/Completed states.
+- Per-node accepted IDs are persisted immediately, including during partial submission failures. Batch/run submission metadata is updated after all node submissions succeed. Stored primary paths identify the first node; the response also includes the returned job ID list.
+- This module records submission. The separate [Run Control monitor](run-control-guide.md) polls live states without rewriting batch/run status fields.
 - Slurm stdout/stderr files use `slurm-{nodeName}-%A_%a.out` under the batch run folder. TOPAS stdout/stderr go to each run's `.log`.

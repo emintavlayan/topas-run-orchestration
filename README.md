@@ -9,6 +9,7 @@ Built with F# and SAFE for TSEBT commissioning.
 |---|---|---|
 | **Generate** | Select templates, nodes and phase-space files; review the input | One batch ID and a generated TOPAS input per node/phase-space pair |
 | **Run** | Select that batch, check preflight, submit | Per-node Slurm arrays and job IDs |
+| **Run Control** | Follow nodes, tasks, utilization and progress | Live Slurm states, TOPAS logs and approximate remaining time |
 | **Collect** | Check completed CSVs/logs; exclude failed nodes or phase spaces if needed | Separate merged dose and uncertainty files for every discovered scorer |
 | **Analyse** | Select collected curves, check detected geometry, choose normalization and metrics | PDD/profile overlays, R50 and profile metrics; CSV exports |
 
@@ -26,6 +27,7 @@ Built with F# and SAFE for TSEBT commissioning.
 | Keep the app running on Ubuntu after logout/reboot | [systemd service setup](docs/systemd-deployment.md) |
 | Host the published app on Windows | [Windows deployment](docs/windows-deployment.md) |
 | Understand files, units and batch IDs | [Data and file reference](docs/data-reference.md) |
+| Monitor running simulations and configure CPU/RAM probes | [Run Control guide](docs/run-control-guide.md) |
 | Compare curves and understand the formulas | [Analysis guide](docs/analysis-guide.md) |
 | Diagnose a failed step | [Troubleshooting](docs/troubleshooting.md) |
 | Change the code or verify it | [Developer guide](docs/development.md) |

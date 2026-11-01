@@ -17,7 +17,7 @@ It reflects the shared app shell, shared wizard shell, and current step logic im
 
 - Single-row top navbar:
   - title: `Topas Run Orchestration`
-  - workflow buttons: `Generate`, `Run`, `Collect`, `Analyse`
+  - workflow buttons: `Generate`, `Run`, `Run Control`, `Collect`, `Analyse`
   - theme selector
 - Active page button is primary; inactive buttons are outlined.
 - Theme selector options:
@@ -172,3 +172,7 @@ Formula dropdown selections are stored in browser localStorage. Other workspace 
 See [the analysis guide](analysis-guide.md) for operator steps and [the analysis specification](analyse-behaviour-spec.md) for calculation boundaries.
 
 Settings uses bordered section headers and individually bordered geometry expanders. Actions use outlined buttons. Enter manual values opens the draft editor; Save values and Cancel retain their existing behavior. Restore from inputs retains backup and validation behavior. The difference-reference selection, toggle and subtraction path have been removed; profile plots are direct overlays.
+
+## Run Control workspace
+
+Run Control is a read-only React workspace with a batch selector and ten-second polling. Expand node rows for exact Slurm element identities, planned waiting tasks, failures and completed tasks. State groups preserve manifest order. View log opens a bounded text panel. Refresh failures retain the last successful snapshot with its timestamp. Batch changes and unmounts discard stale asynchronous responses. See [operator guide](run-control-guide.md).

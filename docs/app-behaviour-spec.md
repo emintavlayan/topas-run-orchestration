@@ -8,6 +8,7 @@
 |---|---|---|
 | Generate | [GeneratePreview](../src/Server/GeneratePreview.fs), [GenerateOperation](../src/Server/GenerateOperation.fs) | Stitch selected templates, expand node/phase-space pairs, check collisions, write inputs and metadata |
 | Run | [RunOperation](../src/Server/RunOperation.fs) | Plan per-node manifests/scripts, run preflight, submit arrays and record accepted job IDs |
+| Run Control | [RunControlOperation](../src/Server/RunControlOperation.fs), [RunControlDomain](../src/Server/RunControlDomain.fs) | Resolve array states, log completion, actual node utilization and concurrency-aware remaining time |
 | Collect | [CollectOperation](../src/Server/CollectOperation.fs) | Discover independent scorer families, check retained runs, merge and calculate raw-batch uncertainty |
 | Analyse | [AnalysisOperation](../src/Server/AnalysisOperation.fs), [AnalysisInput](../src/Server/AnalysisInput.fs), [Analysis](../src/Shared/Analysis.fs) | Load 1D collected curves, derive/override geometry, normalize and calculate metrics |
 
@@ -15,7 +16,7 @@ The [daily workflow](daily-workflow.md) describes operator actions. Individual [
 
 ## Runtime boundaries
 
-`Shared` owns API contracts and pure curve calculations. `Server` owns file, SQLite and process effects. `Client` owns the Elmish wizards and the separate React analysis workspace. Browser selection does not move raw simulation data to the workstation.
+`Shared` owns API contracts and pure curve calculations. `Server` owns file, SQLite and process effects. `Client` owns the Elmish wizards and the separate React analysis and run monitoring workspaces. Browser selection does not move raw simulation data to the workstation.
 
 [Server.buildConfiguration](../src/Server/Server.fs) loads the binary directory's `appsettings.json` and environment variables. Startup loads validated settings, creates required AppRoot directories and initializes SQLite. Environment-specific JSON files are not automatically loaded. [Configuration details](configuration.md)
 

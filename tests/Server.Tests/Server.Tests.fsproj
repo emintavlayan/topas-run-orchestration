@@ -11,6 +11,7 @@
     <Compile Include="RunTests.fs" />
     <Compile Include="CollectTests.fs" />
     <Compile Include="AnalysisTests.fs" />
+    <Compile Include="RunControlTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

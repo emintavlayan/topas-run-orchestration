@@ -13,6 +13,7 @@ This checklist tracks practical behavioral coverage for implemented server workf
 | Generate filesystem operation | Covered | `GenerateTests.fs` |
 | Run manifest and script planning | Covered | `RunTests.fs` |
 | Run submission guards | Covered | `RunTests.fs` |
+| Run Control state, ETA, telemetry parsing and recovery | Covered | `RunControlTests.fs` |
 | Collect preflight | Covered | `CollectTests.fs` |
 | Collect preflight log footer classification | Covered | `CollectTests.fs` |
 | Collect preflight CSV numeric-row validation | Covered | `CollectTests.fs` |
@@ -54,3 +55,7 @@ dotnet run --project .\Build.fsproj -- Bundle
 The first command runs server xUnit tests; the second checks the production server/browser build. They verify different things. See [developer validation](development.md#validate-a-change) and [current validation status](development.md#current-validation-status).
 
 Test source: [CollectTests.fs](../tests/Server.Tests/CollectTests.fs), [AnalysisTests.fs](../tests/Server.Tests/AnalysisTests.fs), [deployment checks](../tests/Deployment/deploy-app-tests.sh).
+
+## Run Control
+
+`RunControlTests.fs` covers expanded Slurm identities and malformed records, live-state precedence over old logs, scheduler and TOPAS completion agreement, real-time parsing, serial/concurrent ETA and missing-evidence cases, CPU counter deltas and guest exclusion, persistent partial submissions, out-of-order scheduler rows, completed elapsed-time freezing, log fallback during scheduler outages, and bounded log access restricted to a stored batch/run pair. Scheduler responses are injected; live cluster access and SSH credentials require verification on the deployed server.

@@ -9,6 +9,7 @@ type Page =
     | Run
     | Collect
     | Analyse
+    | RunControl
 
 /// Represents the visual theme selected for the client shell.
 type ThemeName =

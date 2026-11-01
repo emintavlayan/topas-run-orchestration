@@ -14,15 +14,19 @@
     <Compile Include="GeneratePlanning.fs" />
     <Compile Include="GeneratePreview.fs" />
     <Compile Include="GenerateOperation.fs" />
+    <Compile Include="RunControlStore.fs" />
     <Compile Include="RunOperation.fs" />
     <Compile Include="CollectPlanning.fs" />
     <Compile Include="CollectPreflight.fs" />
+    <Compile Include="RunControlDomain.fs" />
+    <Compile Include="RunControlProbe.fs" />
     <Compile Include="CollectCsvMerge.fs" />
     <Compile Include="CollectStatistics.fs" />
     <Compile Include="CollectOperation.fs" />
     <Compile Include="AnalysisInput.fs" />
     <Compile Include="AnalysisOperation.fs" />
     <Compile Include="SqliteInit.fs" />
+    <Compile Include="RunControlOperation.fs" />
     <Compile Include="Server.fs" />
     <Content Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

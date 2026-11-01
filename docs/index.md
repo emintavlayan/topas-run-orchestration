@@ -10,6 +10,7 @@
 | Install .NET/Node alongside newer versions and choose a hosting route | [Installation manual](installation.md) |
 | Start the app locally | [Local setup](onboarding.md) |
 | Connect the app to your folders and cluster | [Configuration](configuration.md) |
+| Follow live Slurm progress and configure CPU/RAM | [Run Control](run-control-guide.md) |
 | Read and compare collected results | [Analysis guide](analysis-guide.md) |
 | Find a CSV, understand its columns or recover a batch identity | [Data reference](data-reference.md) |
 | Update an existing server | [Deployment](how-to-deploy.md) |

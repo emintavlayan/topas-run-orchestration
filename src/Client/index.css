@@ -116,3 +116,34 @@ body {
     .analysis-empty { min-height: 14rem; }
     .analysis-plot { padding: 0 0 0.25rem; }
 }
+
+.run-control { background: oklch(var(--b1)); border: 1px solid oklch(var(--bc) / .16); border-radius: .75rem; padding: 1.25rem; }
+.run-control-toolbar { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; }
+.run-control-totals { display:flex; flex-wrap:wrap; gap:1rem 1.5rem; padding:1.25rem 0; align-items:center; font-size:.875rem; }
+.run-control-scroll { overflow-x:auto; }
+.run-control-grid { min-width:950px; }
+.run-control-row { display:grid; grid-template-columns:minmax(200px,1.4fr) 65px 65px minmax(180px,1fr) 85px minmax(175px,1fr); gap:1rem; align-items:center; padding:1rem; font-size:.875rem; font-variant-numeric:tabular-nums; }
+.run-control-head { color:oklch(var(--bc) / .6); font-size:.75rem; padding-top:.5rem; padding-bottom:.5rem; }
+.run-control-node { border:1px solid oklch(var(--bc) / .16); border-radius:.5rem; margin:.5rem 0; }
+.run-control-node > summary { cursor:pointer; list-style:none; }
+.run-control-node > summary::-webkit-details-marker { display:none; }
+.run-control-node > summary:hover { background:oklch(var(--b2) / .5); }
+.run-control-node > summary:focus-visible { outline:2px solid oklch(var(--p)); outline-offset:2px; }
+.run-control-name { display:flex; flex-direction:column; gap:.3rem; overflow-wrap:anywhere; }
+.run-control-name strong::before { content:'›'; display:inline-block; width:1rem; color:oklch(var(--bc) / .6); }
+.run-control-node[open] > summary .run-control-name strong::before { transform:rotate(90deg); }
+.run-control-name > span, .run-control-caption { font-size:.7rem; color:oklch(var(--bc) / .6); }
+.run-control-caption { margin-top:.35rem; }
+.run-control-progress { display:flex; overflow:hidden; height:.6rem; border-radius:999px; background:oklch(var(--bc) / .1); }
+.run-control-progress .completed { background:oklch(var(--su)); }
+.run-control-progress .failed { background:oklch(var(--er)); }
+.run-control-progress .running { background:oklch(var(--p) / .4); }
+.run-control-body { border-top:1px solid oklch(var(--bc) / .12); padding:1rem; }
+.run-control-group { margin:.75rem 0 1.25rem; }
+.run-control-group h3 { font-size:.875rem; font-weight:600; padding:.5rem 0; }
+.run-control-table td { vertical-align:middle; }
+.run-control-reason { max-width:24rem; white-space:normal; overflow-wrap:anywhere; }
+.run-control-warning { border-left:3px solid oklch(var(--wa)); padding:.5rem .75rem; margin-bottom:.75rem; font-size:.8rem; }
+.run-control-log { border:1px solid oklch(var(--bc) / .2); border-radius:.5rem; padding:1rem; margin-top:1rem; }
+.run-control-log h3 { font-size:.875rem; font-weight:600; overflow-wrap:anywhere; }
+.run-control-log pre { margin-top:1rem; padding:1rem; max-height:28rem; overflow:auto; background:oklch(var(--b2)); font-size:.75rem; white-space:pre-wrap; overflow-wrap:anywhere; }
