@@ -46,8 +46,10 @@ let validateMetadata allowIndex (metadata: CurveMetadata) = result {
 /// Checks finite ordered samples without smoothing, averaging or normalization.
 let validatePoints (points: AnalysisPoint list) = result {
     do! Result.requireTrue "A curve requires 2 to 100000 samples." (points.Length>=2 && points.Length<=100000)
-    do! Result.requireTrue "Samples require finite positions and non-negative finite values and uncertainties."
-        (points |> List.forall (fun p -> ([p.Position;p.Dose;p.Uncertainty] |> List.forall (fun v -> not (Double.IsNaN v || Double.IsInfinity v))) && p.Dose>=0. && p.Uncertainty>=0.))
+    let validSamples = points |> List.forall (fun p ->
+        ([p.Position;p.Dose;p.Uncertainty] |> List.forall (fun v -> not (Double.IsNaN v || Double.IsInfinity v)))
+        && p.Dose>=0. && p.Uncertainty>=0.)
+    do! Result.requireTrue "Samples require finite positions and non-negative finite values and uncertainties." validSamples
     do! Result.requireTrue "Duplicate coordinates are unsupported; select a single scan." ((points |> List.map _.Position |> List.distinct |> List.length)=points.Length)
 }
 

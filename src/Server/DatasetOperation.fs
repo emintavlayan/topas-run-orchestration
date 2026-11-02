@@ -21,8 +21,10 @@ let import settings (request: SaveDatasetRequest) = result {
     let detected = parsed.Curves |> List.map (fun c -> c.Id,c) |> Map.ofList
     let reviewed = request.Preview.Curves
     do! Result.requireTrue "Select at least one scan." (not reviewed.IsEmpty)
-    do! Result.requireTrue "Each reviewed scan must identify a unique original scan."
-        ((reviewed |> List.map _.Id |> List.distinct |> List.length)=reviewed.Length && (reviewed |> List.forall (fun c -> detected.ContainsKey c.Id)))
+    let uniqueOriginalScans =
+        (reviewed |> List.map _.Id |> List.distinct |> List.length)=reviewed.Length
+        && (reviewed |> List.forall (fun c -> detected.ContainsKey c.Id))
+    do! Result.requireTrue "Each reviewed scan must identify a unique original scan." uniqueOriginalScans
     let! curves = reviewed |> List.traverseResultM (fun curve -> result {
         do! Datasets.validateMetadata false curve.Metadata
         let original = detected[curve.Id]

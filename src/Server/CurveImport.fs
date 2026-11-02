@@ -62,8 +62,8 @@ let private delimited fileIndex name (text: string) = result {
             let positions = ["position", "";"position_mm","mm";"position_cm","cm";"depth_mm","mm";"x_mm","mm";"y_mm","mm"] |> Map.ofList
             let doses = ["dose","";"value","";"dose_gy","Gy";"dose_cgy","cGy";"relative_dose","relative";"dose_percent","%"] |> Map.ofList
             result {
-                do! Result.requireTrue "Unsupported text layout. Use position,value[,uncertainty] columns with optional explicit headers. Vendor exports need a validated parser."
-                    (headers.Length>=2 && headers.Length<=3 && positions.ContainsKey headers[0] && doses.ContainsKey headers[1])
+                let supportedHeaders = headers.Length>=2 && headers.Length<=3 && positions.ContainsKey headers[0] && doses.ContainsKey headers[1]
+                do! Result.requireTrue "Unsupported text layout. Use position,value[,uncertainty] columns with optional explicit headers. Vendor exports need a validated parser." supportedHeaders
                 let valueUnit = doses[headers[1]]
                 let uncertaintyHeader = if valueUnit="Gy" then "standard_uncertainty_gy" elif valueUnit="cGy" then "standard_uncertainty_cgy" else "uncertainty"
                 do! Result.requireTrue "The third column must be absolute uncertainty in the value units." (headers.Length=2 || headers[2]=uncertaintyHeader || headers[2]="uncertainty")

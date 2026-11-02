@@ -160,8 +160,9 @@ let update settings (request: UpdateDatasetRequest) =
                 ["Dataset name",existing.Summary.Name,request.Name;"Source",existing.Summary.Source,request.Source
                  "Dataset acquisition date",existing.Summary.AcquisitionDate,request.AcquisitionDate]
                 |> List.choose (fun (label,a,b) -> if a=b then None else Some ($"{label}: '{a}' → '{b}'"))
-            do! Result.requireTrue "Metadata must identify every saved curve exactly once."
-                ((request.Curves |> List.map fst |> List.sort)=(before |> Map.keys |> Seq.sort |> Seq.toList))
+            let reviewedIds = request.Curves |> List.map fst |> List.sort
+            let savedIds = before |> Map.keys |> Seq.sort |> Seq.toList
+            do! Result.requireTrue "Metadata must identify every saved curve exactly once." (reviewedIds=savedIds)
             do! request.Curves |> List.traverseResultM (fun (id,metadata) -> Datasets.validateMetadata (before[id].Metadata.PositionUnit="index") metadata) |> Result.map ignore
             use connection = connect settings
             use transaction = connection.BeginTransaction()
