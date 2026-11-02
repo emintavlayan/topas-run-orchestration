@@ -1,5 +1,7 @@
 # Generate Behaviour Specification
 
+[README](../README.md) · [All documentation](index.md)
+
 ## Purpose
 
 `Generate` creates TOPAS input files for one simulation batch.
@@ -182,3 +184,16 @@ Automated tests currently cover:
 - planning expansion semantics
 - collision preflight rejection for existing input folder content
 
+
+
+## Implementation boundaries
+
+Source: [GeneratePreview.fs](../src/Server/GeneratePreview.fs), [GeneratePlanning.fs](../src/Server/GeneratePlanning.fs), [GenerateOperation.fs](../src/Server/GenerateOperation.fs), [SeedBaseStore.fs](../src/Server/SeedBaseStore.fs).
+
+- Template text is stitched in request-list order with blank lines between components. No mandatory world/physics/run-control file is automatically inserted.
+- Preview expands only the first selected node/phase-space pair and reports the full expected count; it is not a validation of every resulting input.
+- Placeholder replacement is literal text replacement, not TOPAS parsing, unit validation or geometry validation.
+- Generation plans phase spaces in the outer loop and nodes in the inner loop.
+- Output-base collision checks recognize the base, `.csv` and `.log`; the non-empty run-folder check is broader and also blocks other files at generation time.
+- The collision-failure guarantee is not a general IO/DB rollback guarantee. After preflight, files are written, a batch row is inserted, then run rows are inserted without a transaction spanning all effects. Later failure can leave artifacts.
+- Non-empty selections are enforced by the ordinary wizard. The generate API itself does not independently reject all empty selection combinations; do not treat the UI constraints as a server API invariant.

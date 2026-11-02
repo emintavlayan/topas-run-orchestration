@@ -1,5 +1,7 @@
 # Wizard UX Flow Specification
 
+[README](../README.md) · [All documentation](index.md)
+
 ## Purpose
 
 This document defines the current client wizard UX and behavior for:
@@ -7,6 +9,7 @@ This document defines the current client wizard UX and behavior for:
 - Generate
 - Run
 - Collect
+- Analyse workspace
 
 It reflects the shared app shell, shared wizard shell, and current step logic implemented in client code.
 
@@ -14,7 +17,7 @@ It reflects the shared app shell, shared wizard shell, and current step logic im
 
 - Single-row top navbar:
   - title: `Topas Run Orchestration`
-  - workflow buttons: `Generate`, `Run`, `Collect`
+  - workflow buttons: `Generate`, `Run`, `Run Control`, `Collect`, `Analyse`
   - theme selector
 - Active page button is primary; inactive buttons are outlined.
 - Theme selector options:
@@ -26,7 +29,7 @@ It reflects the shared app shell, shared wizard shell, and current step logic im
 
 ## Shared wizard shell
 
-All workflows use one shared shell with:
+Generate, Run and Collect use one shared shell with:
 
 - left vertical stepper (all step titles visible)
 - right content area (scrollable)
@@ -151,5 +154,25 @@ Collect:
 
 ## Error display behavior
 
-- All workflows show server/client errors in wizard footer error alert area.
+- Generate, Run and Collect show server/client errors in the wizard footer error alert area.
+- Analyse shows workspace/API and per-curve normalization errors above the active tab.
 - Long error text is scroll-constrained.
+
+
+## Analyse workspace
+
+Source: [AnalysisViews.fs](../src/Client/AnalysisViews.fs).
+
+Analyse does not use the wizard stepper or footer. It owns local React state and calls `listAnalysisDatasets`, `loadAnalysisCurve`, `saveAnalysisMapping` and `resetAnalysisMapping`. It refreshes its dataset list on mount and provides an explicit Refresh action.
+
+The workspace has expandable run IDs in a left sidebar and Profiles, Metrics and Settings tabs. Expanded runs list all collection folders, newest first, with the latest selected by default. A run checkbox selects all scorers from one collection. The Profiles button overlays X (solid) and Y (dashed) by default; X, Y and PDD buttons isolate roles. Metrics uses run rows, metric columns and one decimal place. Settings holds normalization, named equations, region and plot controls and geometry details. Inferred geometry is active immediately. Manual overrides use separate drafts and Save/Cancel; no confirmation is required for inferred geometry. CSV links remain in the toolbar. Run and collection controls are disabled while loading. Narrow screens stack the selector above the plot.
+
+Formula dropdown selections are stored in browser localStorage. Other workspace selection state is not saved as an analysis session. Plotly provides point hover values, drag and scroll zoom, pan, autoscale, reset axes and PNG export. Physical plot-limit inputs remain under Settings. Run colours in the selector identify curves; no bottom legend is shown. Zoom affects only the displayed view, never metrics or CSV exports.
+
+See [the analysis guide](analysis-guide.md) for operator steps and [the analysis specification](analyse-behaviour-spec.md) for calculation boundaries.
+
+Settings uses bordered section headers and individually bordered geometry expanders. Actions use outlined buttons. Enter manual values opens the draft editor; Save values and Cancel retain their existing behavior. Restore from inputs retains backup and validation behavior. The difference-reference selection, toggle and subtraction path have been removed; profile plots are direct overlays.
+
+## Run Control workspace
+
+Run Control is a read-only React workspace with a batch selector and ten-second polling. Expand node rows for exact Slurm element identities, planned waiting tasks, failures and completed tasks. State groups preserve manifest order. View log opens a bounded text panel. Refresh failures retain the last successful snapshot with its timestamp. Batch changes and unmounts discard stale asynchronous responses. See [operator guide](run-control-guide.md).

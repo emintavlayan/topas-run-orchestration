@@ -35,7 +35,8 @@ let ``Run script includes account nodelist chdir and topas wrapper without srun`
     let script = buildSlurmScriptText settings "1004" "monte-carlo-02" manifestPath 4
     Assert.Contains("#SBATCH --account=fysiker", script)
     Assert.Contains("#SBATCH --nodelist=monte-carlo-02", script)
-    Assert.Contains("#SBATCH --chdir=C:\\app-root\\runs\\1004", script)
+    let expectedRunFolder = Path.Combine(settings.AppRoot, settings.Paths.Runs, "1004")
+    Assert.Contains($"#SBATCH --chdir={expectedRunFolder}", script)
     Assert.Contains("TOPAS=\"/home/fysiker/shellScripts/topas\"", script)
     Assert.Contains("--array=1-4", script)
     Assert.Contains("\"$TOPAS\" \"$INPUT_FILE\" > \"$LOG_FILE\" 2>&1", script)
@@ -159,3 +160,4 @@ let ``Run submit blocks previously submitted batch`` () =
         assertErrorContains "already been submitted to Slurm as job 12345" (submitRun settings { SeedBase = "1001" })
     finally
         cleanupTestDirectory appRoot
+
