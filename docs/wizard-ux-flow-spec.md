@@ -175,4 +175,4 @@ Settings uses bordered section headers and individually bordered geometry expand
 
 ## Run Control workspace
 
-Run Control is a read-only React workspace with a batch selector and ten-second polling. Expand node rows for exact Slurm element identities, planned waiting tasks, failures and completed tasks. State groups preserve manifest order. View log opens a bounded text panel. Refresh failures retain the last successful snapshot with its timestamp. Batch changes and unmounts discard stale asynchronous responses. See [operator guide](run-control-guide.md).
+The View selector defaults to Live nodes and retains run IDs for historical inspection. Live node rows reveal current/queued runs first; Task details reveals PHSP tasks and original log actions one level deeper. Historical run mode shows participating nodes without implying current occupancy. Logs use a large native modal with keyboard focus, Escape and explicit close. Polling preserves expanded rows, ignores stale responses after view changes, and retains successful data after errors. See [operator guide](run-control-guide.md).

@@ -63,3 +63,5 @@ Test source: [CollectTests.fs](../tests/Server.Tests/CollectTests.fs), [Analysis
 ## Build environment
 
 `BuildNodeEnvironmentTests.fs` covers matching installations without fnm, inherited Node 24 replacement, direct use of the selected npm, missing-version installation, WinGet discovery without PATH entries, installation/npm-version failures, and exact repository pins. The preparation target is a dependency of client build/development paths, and deployment invokes it before server tests.
+
+Live overview regression coverage checks current/upcoming runs on configured nodes and verifies that Slurm responses are shared across runs. Browser smoke checks cover progressive task disclosure, single-PHSP history, modal size and keyboard dismissal, polling and switching between live/history views.
