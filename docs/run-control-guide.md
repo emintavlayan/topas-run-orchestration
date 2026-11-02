@@ -1,8 +1,12 @@
 # Run Control
 
-Open **Run Control** after submitting a batch in **Run**. Select the batch to follow each node. The page refreshes every 10 seconds while open; **Refresh** requests the latest shared snapshot. Batch choices refresh every minute. No new daemon is required: the existing web application's systemd service hosts the monitor.
+Open **Run Control** to see **Live nodes**, the default View selection. Each configured node shows its current run ID, Slurm array ID, CPU/RAM, run progress, elapsed wall time and estimated remaining time. Expand the node for current and queued runs. Open **Task details** inside a run for individual PHSP array elements, their states and log buttons. A single-PHSP run stays compact until details are requested.
 
-Each node row shows current PHSP/Slurm task IDs, whole-node CPU and RAM use, completed tasks, elapsed wall time and estimated remaining time. Expand a row for running tasks, waiting tasks in manifest order, failures, and completed tasks. **View log** reads the last 64 KiB of that generated run's TOPAS log. Monitoring is read-only.
+The same **View** selector retains every generated run ID, including historical runs. Selecting a run shows its participating nodes and saved/current task evidence; this does not imply those nodes are currently occupied. CPU/RAM always report current whole-node use, even while inspecting history. Return to **Live nodes** for current activity.
+
+**View log** opens the last 64 KiB of the original TOPAS log in a large modal. The log scrolls independently; use **Close log** or Escape to return. Keyboard focus stays within the modal and returns to the opener when closed. Late network responses cannot reopen a dismissed log.
+
+Both views refresh every 10 seconds while open and retain the last successful data after refresh failures. History choices refresh every minute. The live overview shares one queue and one accounting query across its active runs, rather than querying each node independently. During a scheduler outage, recent submissions may appear as explicitly **Unknown**; they are not labelled running or idle based solely on old metadata. Queue rows follow submission array IDs, but scheduler execution order is not guaranteed. Monitoring is read-only and uses the existing web application's systemd service.
 
 ## Understanding progress and estimates
 

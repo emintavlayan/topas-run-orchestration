@@ -412,6 +412,18 @@ type RunControlSnapshot = {
 /// Identifies a generated run whose log tail may be inspected.
 type RunControlLogRequest = { SeedBase: string; RunId: string }
 
+/// Identifies a run currently visible in the scheduler on a configured node.
+type RunControlActivity = { SeedBase: string; NodeName: string; ArrayIds: string list; State: RunTaskState }
+
+/// Represents the live cluster overview independently of a selected historical run.
+type RunControlOverview = {
+    CapturedAt: string
+    Nodes: RunControlNode list
+    Runs: RunControlSnapshot list
+    Activities: RunControlActivity list
+    Warnings: string list
+}
+
 type ITopasApi = {
     getSavedDatasets: unit -> Async<Result<SavedDatasetSummary list, string>>
     getSavedDataset: string -> Async<Result<SavedDataset, string>>
@@ -422,6 +434,7 @@ type ITopasApi = {
     getDatasetOriginal: DatasetFileRequest -> Async<Result<ImportFile, string>>
     listCollectedDatasets: unit -> Async<Result<AnalysisDataset list, string>>
     importCollectedDataset: string -> Async<Result<SavedDatasetSummary, string>>
+    getRunControlOverview: unit -> Async<Result<RunControlOverview, string>>
     getRunControlBatches: unit -> Async<Result<RunBatchSummary list, string>>
     getRunControl: string -> Async<Result<RunControlSnapshot, string>>
     getRunControlLog: RunControlLogRequest -> Async<Result<string, string>>

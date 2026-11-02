@@ -88,9 +88,21 @@ let createProcessFromPath processName args dir =
 
     createProcess path args dir
 
-let npm args dir = createProcessFromPath "npm" args dir
+/// Resolves the project Node environment once for all build targets and child processes.
+let private nodeTools=lazy(BuildNodeEnvironment.prepare System.Environment.CurrentDirectory |> Result.defaultWith failwith)
 
-let npx args dir = createProcessFromPath "npx" args dir
+/// Selects and verifies the project toolchain before any cleanup or build work.
+let prepareNodeEnvironment () = nodeTools.Force() |> ignore
+
+/// Runs npm with the verified Node executable and its own npm entry point.
+let npm args dir =
+    let tools=nodeTools.Value
+    createProcess tools.Node (tools.Npm::args) dir
+
+/// Runs npx with the verified Node executable and its own npx entry point.
+let npx args dir =
+    let tools=nodeTools.Value
+    createProcess tools.Node (tools.Npx::args) dir
 
 let run proc arg dir = proc arg dir |> Proc.run |> ignore
 

@@ -148,6 +148,13 @@ let private collectBatchHandler (request: CollectRequest) : Async<Result<Collect
 
 /// Exposes the temporary TSEBT API skeleton.
 let topasApi (_: HttpContext) : ITopasApi = {
+    getRunControlOverview = fun () -> async {
+        match loadSettings () with
+        | Error error -> return Error error
+        | Ok settings ->
+            let enabled = not (String.Equals(buildConfiguration().["Tsebt:Monitoring:NodeTelemetry"],"false",StringComparison.OrdinalIgnoreCase))
+            return! RunControlOperation.getOverview settings enabled
+    }
     getRunControlBatches = fun () -> async {
         return result {
             let! settings = loadSettings ()

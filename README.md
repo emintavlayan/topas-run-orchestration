@@ -36,7 +36,7 @@ Built with F# and SAFE for TSEBT commissioning.
 
 ## Already have the repository and server?
 
-Build tools: **.NET 8 SDK + Node 20/npm 10**. `global.json` selects .NET 8; `.node-version` requests Node 20 through your version manager. Newer installations can coexist. [One-time setup →](docs/installation.md)
+Build tools: **.NET 8 SDK + Node 20/npm 10**. `global.json` selects .NET 8. The build prepares the pinned Node 20.20.2/npm 10 environment automatically, using fnm when needed. Newer installations can coexist; shell profile setup is unnecessary. [One-time setup →](docs/installation.md)
 
 In **Windows PowerShell**, from the repository root on the branch containing the changes:
 

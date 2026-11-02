@@ -6,6 +6,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="BuildNodeEnvironment.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="Build.fs" />
     <None Include="paket.dependencies" />

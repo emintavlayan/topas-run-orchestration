@@ -1,178 +1,72 @@
-# Wizard UX Flow Specification
+# Server Test Coverage Checklist
 
 [README](../README.md) · [All documentation](index.md)
 
-## Purpose
+This checklist tracks practical behavioral coverage for implemented server workflows using the xUnit suite in `tests/Server.Tests`.
 
-This document defines the current client wizard UX and behavior for:
+| Workflow area | Status | Test files |
+|---|---|---|
+| Config validation | Covered | `ConfigTests.fs` |
+| Bootstrap folders | Covered | `ConfigTests.fs` |
+| Generate planning | Covered | `GenerateTests.fs` |
+| Generate collision checks | Covered | `GenerateTests.fs` |
+| Generate filesystem operation | Covered | `GenerateTests.fs` |
+| Run manifest and script planning | Covered | `RunTests.fs` |
+| Run submission guards | Covered | `RunTests.fs` |
+| Run Control state, ETA, telemetry parsing and recovery | Covered | `RunControlTests.fs` |
+| Collect preflight | Covered | `CollectTests.fs` |
+| Collect preflight log footer classification | Covered | `CollectTests.fs` |
+| Collect preflight CSV numeric-row validation | Covered | `CollectTests.fs` |
+| Collect exclusion behavior | Covered | `CollectTests.fs` |
+| Collect CSV merge | Covered | `CollectTests.fs` |
+| Collect statistics | Covered | `CollectTests.fs` |
+| Collect operation | Covered | `CollectTests.fs` |
+| Arbitrary scorer suffixes, mixed legacy CSVs, distinct scorer grids | Covered | `CollectTests.fs` |
+| Per-scorer health, exclusions, independent uncertainty and shared log counts | Covered | `CollectTests.fs` |
+| Longest-stem discovery, unsafe folder names and naming collisions | Covered | `CollectTests.fs` |
+| Multi-scorer failure and successful latest/history preservation | Covered | `CollectTests.fs` |
+| Analytic ranges, ratio/difference metrics and independent conventions | Covered | `AnalysisTests.fs` |
+| Normalization and fixed-factor uncertainty scaling | Covered | `AnalysisTests.fs` |
+| Current generated-input geometry, invalid grids and rotations | Covered | `AnalysisTests.fs` |
+| Dataset discovery, input lookup, saved overrides and path isolation | Covered | `AnalysisTests.fs` |
 
-- Generate
-- Run
-- Collect
-- Analyse workspace
+Notes:
 
-It reflects the shared app shell, shared wizard shell, and current step logic implemented in client code.
-
-## Shared app shell
-
-- Single-row top navbar:
-  - title: `Topas Run Orchestration`
-  - workflow buttons: `Generate`, `Run`, `Run Control`, `Collect`, `Import`, `Analyse`
-  - theme selector
-- Active page button is primary; inactive buttons are outlined.
-- Theme selector options:
-  - `Light`
-  - `Dark`
-  - `Corporate`
-  - `Night`
-  - `Cyberpunk`
-
-## Shared wizard shell
-
-Generate, Run and Collect use one shared shell with:
-
-- left vertical stepper (all step titles visible)
-- right content area (scrollable)
-- fixed footer action bar (always visible)
-- footer actions:
-  - left: `Cancel`
-  - right: `Previous` (when applicable), then primary action
-
-Layout safeguards:
-
-- wizard card is viewport-bounded
-- content body scrolls
-- long tables/lists/scripts use bounded internal scroll containers
-- footer is `shrink-0` and does not move offscreen on long content
-
-## Generate flow
-
-Steps:
-
-1. Welcome
-2. Components
-3. Nodes
-4. Phase-space
-5. Review
-6. Result
-
-Primary actions:
-
-- Welcome: `Start`
-- Components/Nodes/Phase-space: `Next`
-- Review: `Generate`
-- Result: `Back to Generate`
-
-Behavior:
-
-- Component step requires at least one selected component.
-- Node and phase-space steps support `Select all`/`Select none`.
-- Review requests preview before final execution.
-- The stitched TOPAS preview uses theme-aware syntax highlighting and visually flags unresolved placeholders. This is a review aid, not TOPAS semantic or physics validation.
-- Result shows generated run summary.
-- Cancel resets Generate wizard state.
-
-## Run flow
-
-Steps:
-
-1. Welcome
-2. Batch
-3. Preflight
-4. Script
-5. Result
-
-Primary actions:
-
-- Welcome: `Start`
-- Batch/Preflight: `Next`
-- Script: `Submit`
-- Result: `Back to Run`
-
-Behavior:
-
-- Batch step allows selecting only non-submitted generated batches.
-- Script preview displays only the first node preview from `NodeScriptPreviews`.
-- Script content is internally scrollable.
-- Submit is blocked when preflight is not `CanSubmit`.
-- Cancel resets Run wizard state.
-
-## Collect flow
-
-Steps:
-
-1. Welcome
-2. Batch
-3. Preflight
-4. Review
-5. Result
-
-Primary actions:
-
-- Welcome: `Start`
-- Batch/Preflight: `Next`
-- Review: `Collect` or `Collect again` (or `Collecting...` while loading)
-- Result: `Back to Collect`
-
-Behavior:
-
-- Batch step allows selecting any batch with generated runs, including batches collected before.
-- Preflight shows:
-  - checks table
-  - file issue table (run, phase-space, node, kind, problem, message)
-  - active exclusions
-- Exclusion actions:
-  - `Skip failed phase-space files`
-  - `Skip failed nodes`
-- Selecting one exclusion mode clears the other mode.
-- Review and collect run against effective rows after exclusions.
-- Review shows a neutral info block when the batch has already been collected, including the latest collection folder and a note that recollection creates a new timestamped folder under `outputs/{seedBase}/`.
-- Collect action is disabled when `CanCollect = false`.
-- Duplicate collect submissions are blocked while loading.
-- Cancel resets Collect wizard state.
-
-## Server API usage by workflow
-
-Generate:
-
-- `getAppConfig`
-- `getTemplateFiles`
-- `previewGenerate`
-- `generate`
-
-Run:
-
-- `getRunBatches`
-- `previewRun`
-- `submitRun`
-
-Collect:
-
-- `getCollectBatches`
-- `previewCollect`
-- `collectBatch`
-
-## Error display behavior
-
-- Generate, Run and Collect show server/client errors in the wizard footer error alert area.
-- Analyse shows workspace/API and per-curve normalization errors above the active tab.
-- Long error text is scroll-constrained.
+- This is workflow-level behavioral coverage, not line/branch coverage.
+- Tests use temporary folders and fake CSV/process output fixtures.
+- Real Slurm execution and real TOPAS execution remain manual smoke-test responsibilities.
 
 
-## Analyse workspace
+Deployment helper checks run independently on Linux:
 
-Source: [AnalysisViews.fs](../src/Client/AnalysisViews.fs).
+```bash
+bash tests/Deployment/deploy-app-tests.sh
+```
 
-Analyse uses local React state and saved dataset APIs. It lists dataset versions from SQLite, expands each into individually selectable curves and loads selected snapshots. Its Profiles / Metrics / Settings controls retain the existing normalization and metric behavior. Geometry edits are saved to SQLite; Restore imported geometry restores a confirmed snapshot. See [Analysis guide](analysis-guide.md).
+These use temporary application folders and mock service commands to verify success, production-config preservation, startup-failure rollback, HTTP-failure rollback, and rejection of a corrupted archive before stopping the service. They do not deploy to a server.
 
-## Import workspace
+## Run the checks
 
-Import uses local React state. Choose multiple local files, review per-scan metadata and raw samples, confirm dose quantity and units, and save selected scans. Existing collections can be registered explicitly. Saved dataset management supports metadata edits, original-file retrieval and revision-checked deletion with an inline confirmation. New Collect results display dataset registration separately from merging success. See [Import guide](import-guide.md).
+```powershell
+dotnet test .\tests\Server.Tests\Server.Tests.fsproj
+dotnet run --project .\Build.fsproj -- Bundle
+```
 
-## Run Control workspace
+The first command runs server xUnit tests; the second checks the production server/browser build. They verify different things. See [developer validation](development.md#validate-a-change) and [current validation status](development.md#current-validation-status).
 
-Run Control is a read-only React workspace with a batch selector and ten-second polling. Expand node rows for exact Slurm element identities, planned waiting tasks, failures and completed tasks. State groups preserve manifest order. View log opens a bounded text panel. Refresh failures retain the last successful snapshot with its timestamp. Batch changes and unmounts discard stale asynchronous responses. See [operator guide](run-control-guide.md).
+Test source: [CollectTests.fs](../tests/Server.Tests/CollectTests.fs), [AnalysisTests.fs](../tests/Server.Tests/AnalysisTests.fs), [deployment checks](../tests/Deployment/deploy-app-tests.sh).
+
+## Run Control
+
+`RunControlTests.fs` covers expanded Slurm identities and malformed records, live-state precedence over old logs, scheduler and TOPAS completion agreement, real-time parsing, serial/concurrent ETA and missing-evidence cases, CPU counter deltas and guest exclusion, persistent partial submissions, out-of-order scheduler rows, completed elapsed-time freezing, log fallback during scheduler outages, and bounded log access restricted to a stored batch/run pair. Scheduler responses are injected; live cluster access and SSH credentials require verification on the deployed server.
+
+## Build environment
+
+`BuildNodeEnvironmentTests.fs` covers matching installations without fnm, inherited Node 24 replacement, direct use of the selected npm, missing-version installation, WinGet discovery without PATH entries, installation/npm-version failures, and exact repository pins. The preparation target is a dependency of client build/development paths, and deployment invokes it before server tests.
+
+Live overview regression coverage checks current/upcoming runs on configured nodes and verifies that Slurm responses are shared across runs. Browser smoke checks cover progressive task disclosure, single-PHSP history, modal size and keyboard dismissal, polling and switching between live/history views.
 
 ## Saved datasets and import
+
 
 `DatasetTests.fs` covers exact original bytes, server-side reparsing rather than trusting preview samples, required metadata and confirmation, invalid scans, independent imports, metadata revision conflicts, cascading deletion, bounded MCC scan identity and historical collection snapshots. Server and client compilation pass under .NET SDK 8.0.420. All 74 server Fact methods, including the dataset tests, pass through direct invocation with xUnit assertions. VSTest crashes in this environment; Fable compilation is blocked by subprocess process inspection. Run `dotnet test tests/Server.Tests/Server.Tests.fsproj` locally for standard-runner verification. Native MCC/SNC compatibility still requires actual measurement exports.

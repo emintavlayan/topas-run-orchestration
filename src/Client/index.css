@@ -147,3 +147,16 @@ body {
 .run-control-log { border:1px solid oklch(var(--bc) / .2); border-radius:.5rem; padding:1rem; margin-top:1rem; }
 .run-control-log h3 { font-size:.875rem; font-weight:600; overflow-wrap:anywhere; }
 .run-control-log pre { margin-top:1rem; padding:1rem; max-height:28rem; overflow:auto; background:oklch(var(--b2)); font-size:.75rem; white-space:pre-wrap; overflow-wrap:anywhere; }
+.run-control-run { border:1px solid oklch(var(--bc) / .14); border-radius:.5rem; padding:1rem; margin-bottom:.75rem; }
+.run-control-run-heading { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; margin-bottom:.75rem; font-size:.875rem; }
+.run-control-task-details > summary { cursor:pointer; list-style:none; }
+.run-control-task-details > summary::before { content:'›'; margin-right:.5rem; }
+.run-control-task-details[open] > summary::before { content:'⌄'; }
+.run-control-task-body { margin-top:1rem; }
+.run-control-log-dialog { width:min(1200px,94vw); max-width:94vw; height:88vh; max-height:92vh; padding:0; border:1px solid oklch(var(--bc) / .25); border-radius:.75rem; background:oklch(var(--b1)); color:oklch(var(--bc)); box-shadow:0 20px 80px rgb(0 0 0 / .3); }
+.run-control-log-dialog::backdrop { background:rgb(0 0 0 / .5); }
+.run-control-log-dialog[open] { display:flex; flex-direction:column; }
+.run-control-log-heading { display:flex; gap:1rem; align-items:center; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid oklch(var(--bc) / .16); flex-shrink:0; }
+.run-control-log-heading h3 { font-weight:600; overflow-wrap:anywhere; }
+.run-control-log-heading p { font-size:.75rem; opacity:.6; margin-top:.25rem; }
+.run-control-log-dialog pre { padding:1.25rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.8rem; line-height:1.6; flex:1; min-height:0; }
