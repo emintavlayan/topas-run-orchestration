@@ -53,7 +53,7 @@ The configured SQLite database now contains original files and samples as well a
 
 ## Local validation
 
-No .NET build or test run was performed in the implementation environment. On your development computer:
+Server and client compile under .NET SDK 8.0.420. All 74 server xUnit Fact methods pass when invoked directly with their assertions; the standard VSTest runner crashes in the execution environment. Fable JavaScript compilation is also blocked by environment process inspection, so browser validation is pending. On your development computer:
 
 ```powershell
 git pull --ff-only

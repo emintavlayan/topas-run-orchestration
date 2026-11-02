@@ -8,7 +8,7 @@ open Shared
 open Server.Tests.TestHelpers
 
 /// Encodes a synthetic original without changing line endings or byte order.
-let private file name text : ImportFile = {Name=name;ContentBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes text)}
+let private file name (text: string) : ImportFile = {Name=name;ContentBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes text)}
 
 /// Builds a reviewed dose import with explicit units and orientation.
 let private request () : SaveDatasetRequest =
@@ -58,10 +58,12 @@ let ``Incomplete metadata and unconfirmed dose imports are rejected atomically``
 let ``Saved versions use independent samples revision checks and cascading deletion`` () = inDatabase (fun settings ->
     let first=assertOk(DatasetOperation.import settings (request()))
     let second=assertOk(DatasetOperation.import settings (request()))
-    Assert.NotEqual(first.Id,second.Id)
+    Assert.NotEqual<string>(first.Id,second.Id)
     let loaded=assertOk(DatasetStore.load settings first.Id)
-    let edit:UpdateDatasetRequest={Id=first.Id;Revision=first.Revision;Name="Renamed";Source=first.Source;AcquisitionDate=first.AcquisitionDate
-                                  Curves=loaded.Curves |> List.map (fun c -> c.Id,{c.Metadata with DepthMm="13"})}
+    let edit:UpdateDatasetRequest = {
+        Id=first.Id;Revision=first.Revision;Name="Renamed";Source=first.Source;AcquisitionDate=first.AcquisitionDate
+        Curves=loaded.Curves |> List.map (fun c -> c.Id,{c.Metadata with DepthMm="13"})
+    }
     assertOk(DatasetOperation.update settings edit) |> ignore
     Assert.True(Result.isError(DatasetOperation.update settings edit))
     Assert.True(Result.isError(DatasetStore.delete settings {Id=first.Id;Revision=first.Revision}))

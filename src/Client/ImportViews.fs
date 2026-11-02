@@ -117,20 +117,28 @@ let View () =
                 Id=dataset.Id;Revision=dataset.Revision;Name=name;Source=source;AcquisitionDate=acquired
                 Curves=curves |> List.map (fun c -> c.Id,c.Metadata) }
             | None,Some parsed -> async {
-                let! result = api.saveImportedDataset {Name=name;Source=source;AcquisitionDate=acquired;Confirmed=confirmed
-                                                      Preview={parsed with Curves=curves |> List.filter (fun c -> List.contains c.Id included) |> List.map (fun c -> {c with Points=[]})}}
+                let request: SaveDatasetRequest = {
+                    Name=name;Source=source;AcquisitionDate=acquired;Confirmed=confirmed
+                    Preview={parsed with Curves=curves |> List.filter (fun c -> List.contains c.Id included) |> List.map (fun c -> {c with Points=[]})}
+                }
+                let! result = api.saveImportedDataset request
                 return result |> Result.map ignore }
             | _ -> async { return Error "Choose files first." }
         match saved with
         | Error message -> setError message
-        | Ok () -> clearReview(); do! refresh(); setNotice "Dataset saved. Select it in Analyse."
+        | Ok () ->
+            clearReview()
+            do! refresh()
+            setNotice "Dataset saved. Select it in Analyse."
     })
     /// Registers an existing collection once without replacing previously saved curves.
     let importCollection id = run (async {
         let! saved = api.importCollectedDataset id
         match saved with
         | Error message -> setError message
-        | Ok _ -> do! refresh(); setNotice "Collection registered. Select it in Analyse."
+        | Ok _ ->
+            do! refresh()
+            setNotice "Collection registered. Select it in Analyse."
     })
     /// Deletes only the explicitly confirmed saved dataset version.
     let delete (dataset: SavedDatasetSummary) = run (async {
@@ -212,7 +220,7 @@ let View () =
                             [{Id=curve.Id;Label=curve.Metadata.Name;Role=curve.Metadata.Role;HasUncertainty=curve.HasUncertainty;Points=curve.Points}]]]
                 | None -> Html.none
                 match original with
-                | Some file -> Html.a [prop.className "btn btn-outline btn-sm";prop.download (file.Name.Replace('\\','/').Split('/') |> Array.last)
+                | Some file -> Html.a [prop.className "btn btn-outline btn-sm";prop.download (file.Name.Replace('\\','/').Split('/') |> Array.last);
                                       prop.href ("data:application/octet-stream;base64,"+file.ContentBase64);prop.text ("Download "+file.Name)]
                 | None -> Html.none
                 if not issues.IsEmpty then Html.ul [prop.className "text-sm text-warning";prop.children [for issue in issues -> Html.li issue]]

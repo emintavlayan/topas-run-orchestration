@@ -32,11 +32,8 @@ let private connect (settings: TsebtSettings) =
     connection.Open()
     connection
 
-/// Creates additive dataset tables without changing existing simulation tables.
-let initialize settings =
-    try
-        use connection = connect settings
-        execute connection None """
+/// Defines additive tables for saved datasets and original files.
+let private schema = """
 CREATE TABLE IF NOT EXISTS saved_datasets (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, source TEXT NOT NULL, acquired_at TEXT NOT NULL,
  saved_at TEXT NOT NULL, collection_key TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1);
@@ -52,7 +49,13 @@ CREATE TABLE IF NOT EXISTS saved_samples (
 CREATE TABLE IF NOT EXISTS saved_originals (
  dataset_id TEXT NOT NULL REFERENCES saved_datasets(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL,
  name TEXT NOT NULL, content BLOB NOT NULL, PRIMARY KEY(dataset_id,ordinal));
-""" [] |> ignore
+"""
+
+/// Creates additive dataset tables without changing existing simulation tables.
+let initialize settings =
+    try
+        use connection = connect settings
+        execute connection None schema [] |> ignore
         Ok ()
     with ex -> Error $"Cannot initialize datasets: {ex.Message}"
 

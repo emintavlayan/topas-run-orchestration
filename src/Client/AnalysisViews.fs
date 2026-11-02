@@ -198,7 +198,7 @@ let View () =
             let current = Map.tryFind id values |> Option.defaultValue s.Mapping
             Map.add id (change current) values)
     /// Saves a validated manual override and activates it after the server accepts it.
-    let saveMapping s mapping = run (async {
+    let saveMapping s (mapping: AnalysisMapping) = run (async {
         let resolved = {mapping with Confirmed=true}
         let id = s.Curve.Dataset.Id
         let! result = api.saveAnalysisMapping {Id=id;Mapping=resolved}

@@ -50,7 +50,7 @@ let private draft fileIndex fileName scanId parser metadata points hasUncertaint
       HasUncertainty=hasUncertainty; Points=points }
 
 /// Reads a strict two-column dose export with optional unit-bearing headers.
-let private delimited fileIndex name (text: string) = result {
+let private delimited fileIndex (name: string) (text: string) = result {
     let lines = text.Replace("\r", "").Split('\n') |> Array.toList |> List.filter (fun line -> not (String.IsNullOrWhiteSpace line) && not (line.TrimStart().StartsWith("#")))
     do! Result.requireTrue "File contains no scan samples." (not lines.IsEmpty)
     let fields = cells lines.Head
@@ -75,7 +75,7 @@ let private delimited fileIndex name (text: string) = result {
 }
 
 /// Reads explicitly bounded MCC-style scans without assuming units or unrecognised metadata.
-let private mcc fileIndex name (text: string) = result {
+let private mcc fileIndex (name: string) (text: string) = result {
     let blocks = Regex.Matches(text, @"(?ms)^\s*BEGIN_SCAN\s+(\d+)\s*$([\s\S]*?)^\s*END_SCAN\s+\1\s*$") |> Seq.cast<Match> |> Seq.toList
     do! Result.requireTrue "No complete BEGIN_SCAN/END_SCAN blocks were found." (not blocks.IsEmpty)
     let starts = Regex.Matches(text,@"(?m)^\s*BEGIN_SCAN\s+\d+\s*$").Count
