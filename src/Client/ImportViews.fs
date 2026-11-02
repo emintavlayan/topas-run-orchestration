@@ -215,7 +215,7 @@ let View () =
                             Html.ul [prop.className "text-xs list-disc pl-5 pt-2";prop.children [for correction in curve.Provenance.Corrections -> Html.li correction]]]]
                 match curves |> List.tryFind (fun c -> c.Id=active) with
                 | Some curve ->
-                    Html.div [prop.style [style.height 360];prop.children [
+                    Html.div [prop.className "import-preview";prop.children [
                         AnalysisPlot.view "Import preview" curve.Id ("Original position ["+(if curve.Metadata.PositionUnit="" then "unknown" else curve.Metadata.PositionUnit)+"]")
                             ("Original dose ["+(if curve.Metadata.ValueUnit="" then "unknown" else curve.Metadata.ValueUnit)+"]") false true
                             [{Id=curve.Id;Label=curve.Metadata.Name;Role=curve.Metadata.Role;HasUncertainty=curve.HasUncertainty;Color=AnalysisPlot.color curve.Id;Points=curve.Points}]]]
