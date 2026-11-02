@@ -56,7 +56,6 @@ Use a fresh `deploy-linux` output folder for this initial package. These are gen
 With the SDK/Node setup complete, from the repository root in Bash:
 
 ```bash
-fnm use 20
 dotnet run --project Build.fsproj -- Bundle
 dotnet publish src/Server/Server.fsproj -c Release -r linux-x64 --self-contained false -p:UseAppHost=false -o deploy-linux
 cp -a deploy/public deploy-linux/public

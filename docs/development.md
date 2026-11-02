@@ -19,7 +19,7 @@ Follow the [F# doctrine](safe-light-fsharp-doctrine.md): small named functions, 
 
 ## Local development
 
-Complete [installation and version selection](installation.md), then follow [local setup](onboarding.md). Run build commands from the repository root: `global.json` selects a stable .NET 8 SDK, `.node-version` requests Node 20 through fnm, and npm enforces Node 20/npm 10 in each client project. The regular watcher command is:
+Complete [installation and version selection](installation.md), then follow [local setup](onboarding.md). Run build commands from the repository root: `global.json` selects a stable .NET 8 SDK, `.node-version` pins Node 20.20.2. The `PrepareNode` target selects a matching installation or uses fnm to install/select it without shell initialization; npm enforces Node 20/npm 10 in each client project. The regular watcher command is:
 
 ```powershell
 dotnet run --project .\Build.fsproj
@@ -62,3 +62,9 @@ The analysis implementation passed client/server .NET builds and 64 compiled ser
 ## Documentation maintenance
 
 Keep the README as the workflow map. Put operator steps in task guides and exact algorithms/edge cases in specifications. Link source entry points instead of duplicating code. When changing paths, formulas or API behavior, update the applicable guide, reference and tests together. Do not describe planned features as implemented.
+
+## Reusing Node selection in other SAFE apps
+
+Use `BuildNodeEnvironment.fs` as the build-only environment boundary: pin the full Node version in `.node-version`, read npm's major from the client package engines, and run `PrepareNode` before cleanup/build targets. Run npm/npx through the verified Node installation and let Fable/Vite inherit its PATH. Keep a version manager as a one-time developer prerequisite rather than requiring per-terminal setup. Install Node only on machines that build the browser bundle; published SAFE apps serve their bundled static files without Node. A prebuilt application release is the route for users who should not need build tools at all.
+
+This repository implements the pattern here; other application repositories must adopt it explicitly. A standalone toolchain check is `dotnet run --project Build.fsproj -- PrepareNode`.

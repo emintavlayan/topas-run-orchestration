@@ -5,7 +5,9 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../BuildNodeEnvironment.fs" Link="BuildNodeEnvironment.fs" />
     <Compile Include="TestHelpers.fs" />
+    <Compile Include="BuildNodeEnvironmentTests.fs" />
     <Compile Include="ConfigTests.fs" />
     <Compile Include="GenerateTests.fs" />
     <Compile Include="RunTests.fs" />

@@ -59,3 +59,7 @@ Test source: [CollectTests.fs](../tests/Server.Tests/CollectTests.fs), [Analysis
 ## Run Control
 
 `RunControlTests.fs` covers expanded Slurm identities and malformed records, live-state precedence over old logs, scheduler and TOPAS completion agreement, real-time parsing, serial/concurrent ETA and missing-evidence cases, CPU counter deltas and guest exclusion, persistent partial submissions, out-of-order scheduler rows, completed elapsed-time freezing, log fallback during scheduler outages, and bounded log access restricted to a stored batch/run pair. Scheduler responses are injected; live cluster access and SSH credentials require verification on the deployed server.
+
+## Build environment
+
+`BuildNodeEnvironmentTests.fs` covers matching installations without fnm, inherited Node 24 replacement, direct use of the selected npm, missing-version installation, WinGet discovery without PATH entries, installation/npm-version failures, and exact repository pins. The preparation target is a dependency of client build/development paths, and deployment invokes it before server tests.
