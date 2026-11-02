@@ -144,6 +144,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     | SelectPage page ->
         match page with
         | GenerateTypes.Page.RunControl -> {model with SelectedPage=GenerateTypes.Page.RunControl}, Cmd.none
+        | GenerateTypes.Page.Import -> {model with SelectedPage=GenerateTypes.Page.Import}, Cmd.none
         | GenerateTypes.Page.Analyse -> {model with SelectedPage=GenerateTypes.Page.Analyse}, Cmd.none
         | Generate ->
             {

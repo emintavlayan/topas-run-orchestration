@@ -21,6 +21,7 @@
         <Compile Include="CollectViews.fs" />
         <Compile Include="AnalysisPlot.fs" />
         <Compile Include="AnalysisViews.fs" />
+        <Compile Include="ImportViews.fs" />
         <Compile Include="RunControlViews.fs" />
         <Compile Include="PageViews.fs" />
         <Compile Include="Index.fs" />

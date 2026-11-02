@@ -196,6 +196,7 @@ let pageLabel (page: Page) : string =
     | Generate -> "Generate"
     | Run -> "Run"
     | Collect -> "Collect"
+    | Import -> "Import"
     | Analyse -> "Analyse"
     | RunControl -> "Run Control"
 

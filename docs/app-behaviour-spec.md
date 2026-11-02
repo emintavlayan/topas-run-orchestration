@@ -10,7 +10,8 @@
 | Run | [RunOperation](../src/Server/RunOperation.fs) | Plan per-node manifests/scripts, run preflight, submit arrays and record accepted job IDs |
 | Run Control | [RunControlOperation](../src/Server/RunControlOperation.fs), [RunControlDomain](../src/Server/RunControlDomain.fs) | Resolve array states, log completion, actual node utilization and concurrency-aware remaining time |
 | Collect | [CollectOperation](../src/Server/CollectOperation.fs) | Discover independent scorer families, check retained runs, merge and calculate raw-batch uncertainty |
-| Analyse | [AnalysisOperation](../src/Server/AnalysisOperation.fs), [AnalysisInput](../src/Server/AnalysisInput.fs), [Analysis](../src/Shared/Analysis.fs) | Load 1D collected curves, derive/override geometry, normalize and calculate metrics |
+| Import / datasets | [CurveImport](../src/Server/CurveImport.fs), [DatasetOperation](../src/Server/DatasetOperation.fs), [DatasetStore](../src/Server/DatasetStore.fs) | Review files, snapshot collections, preserve originals and samples, manage metadata |
+| Analyse | [DatasetStore](../src/Server/DatasetStore.fs), [Analysis](../src/Shared/Analysis.fs) | Load saved curves, apply physical mapping, normalize and calculate metrics |
 
 The [daily workflow](daily-workflow.md) describes operator actions. Individual [behavior specifications](index.md#inspect-exact-behavior) contain precise algorithms and limitations.
 
@@ -26,7 +27,7 @@ Templates are configured external inputs, not automatically managed by this repo
 
 A batch is identified by `seedBase`. Seeds concatenate batch ID and node digit; run IDs add the phase-space index. The next batch ID is read from SQLite rather than written back to JSON.
 
-SQLite stores generated batch/run metadata, submission fields, latest collect metadata and collection history. Large simulation outputs remain under AppRoot. Analysis mapping overrides are JSON sidecars beside the selected collected CSV. Metric preferences are browser-local; selected curves are workspace state and are reset when the workspace is remounted.
+SQLite stores generated batch/run metadata, submission fields, latest collect metadata and collection history. Large simulation outputs remain under AppRoot. Saved datasets, originals, samples, curve metadata and analysis overrides live in SQLite. Legacy CSV/JSON sidecars are read only when registering historical collections. Metric preferences are browser-local; selected curves are workspace state and are reset when the workspace is remounted.
 
 ## Guarantees and limits
 
@@ -36,7 +37,7 @@ SQLite stores generated batch/run metadata, submission fields, latest collect me
 | Run | Metadata and path checks block ordinary duplicate submission | Submissions happen sequentially per node; earlier accepted jobs are not cancelled if a later submission fails |
 | Collect | Missing/unhealthy retained sources and unbalanced rows block processing; each scorer has independent numeric processing | Preflight does not validate every numeric row or the whole CSV geometry; merge/uncertainty stages perform further checks |
 | Collect status | Scorer-stage failure does not advance the previous successful latest pointers | Marker writing, latest DB update and history update occur sequentially after output generation, not as one filesystem/DB transaction |
-| Analyse | Dataset IDs are resolved against discovered files; physical metrics require confirmed mappings | File discovery is not filtered by collection DB status; partial-failure folders can appear if the expected CSV exists |
+| Import / Analyse | Saved curve IDs resolve against SQLite; imports reparse original bytes; physical metrics require confirmed mappings | Historical discovery can include partial-output folders; unsupported/invalid scorers fail registration explicitly |
 
 Retain inputs, raw outputs, manifests and mappings for reproducibility. They are not protected from manual editing by the application.
 

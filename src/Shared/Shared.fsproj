@@ -6,6 +6,7 @@
   <ItemGroup>
     <Compile Include="Shared.fs" />
     <Compile Include="Analysis.fs" />
+    <Compile Include="Datasets.fs" />
     <Content Include="paket.references" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />

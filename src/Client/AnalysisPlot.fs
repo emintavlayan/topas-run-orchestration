@@ -7,7 +7,7 @@ open Feliz
 open Shared
 
 /// Represents a displayed curve with stable identity and line styling.
-type Curve = { Id: string; Label: string; Role: string; Points: AnalysisPoint list }
+type Curve = { Id: string; Label: string; Role: string; HasUncertainty: bool; Points: AnalysisPoint list }
 
 /// Imports the React component that manages the Plotly chart lifecycle.
 [<Import("default", "./AnalysisChart.jsx")>]
@@ -19,7 +19,7 @@ let private createElement (component: obj, props: obj): Fable.React.ReactElement
 
 /// Assigns a stable colour to each run across scorers and collection changes.
 let color (id: string) =
-    let key = id.Split('/').[0]
+    let key = id
     let index = key |> Seq.fold (fun total c -> (total*31+int c)%8) 0
     let palette = [|"#2563eb"; "#e05a36"; "#009e73"; "#a855f7"; "#d18a00"; "#0891b2"; "#db2777"; "#64748b"|]
     palette.[index]
@@ -36,7 +36,7 @@ let private traces bands samples valueFormat (curve: Curve) =
     let positions = curve.Points |> List.map _.Position |> List.toArray
     let stroke = color curve.Id
     [|
-        if bands then
+        if bands && curve.HasUncertainty then
             for direction in [-1.0;1.0] do
                 yield createObj [
                     "type" ==> "scatter"; "mode" ==> "lines"

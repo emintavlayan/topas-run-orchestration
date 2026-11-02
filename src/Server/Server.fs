@@ -167,30 +167,20 @@ let topasApi (_: HttpContext) : ITopasApi = {
             return! RunControlOperation.getLog settings request
         }
     }
-    listAnalysisDatasets = fun () -> async {
-        return result {
-            let! settings = loadSettings ()
-            return! AnalysisOperation.listDatasets settings
-        }
-    }
-    loadAnalysisCurve = fun id -> async {
-        return result {
-            let! settings = loadSettings ()
-            return! AnalysisOperation.loadCurve settings id
-        }
-    }
-    saveAnalysisMapping = fun request -> async {
-        return result {
-            let! settings = loadSettings ()
-            return! AnalysisOperation.saveMapping settings request
-        }
-    }
-    resetAnalysisMapping = fun id -> async {
-        return result {
-            let! settings = loadSettings ()
-            return! AnalysisOperation.resetMapping settings id
-        }
-    }
+    getSavedDatasets = fun () -> async { return loadSettings () |> Result.bind DatasetStore.list }
+    getSavedDataset = fun id -> async { return loadSettings () |> Result.bind (fun settings -> DatasetStore.load settings id) }
+    previewImport = fun files -> async { return CurveImport.preview files }
+    saveImportedDataset = fun request -> async { return loadSettings () |> Result.bind (fun settings -> DatasetOperation.import settings request) }
+    updateSavedDataset = fun request -> async { return loadSettings () |> Result.bind (fun settings -> DatasetOperation.update settings request) }
+    deleteSavedDataset = fun request -> async { return loadSettings () |> Result.bind (fun settings -> DatasetStore.delete settings request) }
+    getDatasetOriginal = fun request -> async { return loadSettings () |> Result.bind (fun settings -> DatasetStore.original settings request) }
+    listCollectedDatasets = fun () -> async { return loadSettings () |> Result.bind DatasetOperation.listCollections }
+    importCollectedDataset = fun key -> async { return loadSettings () |> Result.bind (fun settings ->
+        try DatasetOperation.registerCollection settings key with ex -> Error ex.Message) }
+    listAnalysisDatasets = fun () -> async { return loadSettings () |> Result.bind DatasetOperation.listAnalysisDatasets }
+    loadAnalysisCurve = fun id -> async { return loadSettings () |> Result.bind (fun settings -> DatasetStore.loadAnalysisCurve settings id) }
+    saveAnalysisMapping = fun request -> async { return loadSettings () |> Result.bind (fun settings -> DatasetStore.saveMapping settings request) }
+    resetAnalysisMapping = fun id -> async { return loadSettings () |> Result.bind (fun settings -> DatasetStore.resetMapping settings id) }
     getAppConfig = getAppConfigHandler
     getTemplateFiles = getTemplateFilesHandler
     previewGenerate = previewGenerateHandler

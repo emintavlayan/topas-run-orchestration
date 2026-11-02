@@ -30,7 +30,7 @@ All paths below are relative to AppRoot. `1113` and the timestamp are examples.
 | `outputs/1113/{timestamp}/pdd/collect_manifest.tsv` | Sources contributing to this scorer |
 | `outputs/1113/{timestamp}/pdd/merged-over-nodes/phsp21_merged.csv` | Node-summed result for one phase space |
 | `outputs/1113/{timestamp}/pdd/merged-over-phsp/dose_merged.csv` | Final dose summed across retained nodes and phase spaces |
-| `outputs/1113/{timestamp}/pdd/dose_with_uncertainty.csv` | Final summed dose plus raw-batch statistical uncertainty; Analyse reads this |
+| `outputs/1113/{timestamp}/pdd/dose_with_uncertainty.csv` | Final summed dose plus raw-batch statistical uncertainty; registration snapshots this into SQLite |
 | `outputs/1113/{timestamp}/pdd/dose_with_uncertainty.csv.analysis.json` | Explicit saved analysis mapping override, if created |
 
 The same collected layout applies independently to every scorer. Legacy suffix-less CSVs use `default/` in new collections; older collections can have final files directly at their timestamp root.
@@ -55,10 +55,14 @@ Collection computes uncertainty from original raw batches, not from node-merged 
 
 ## Coordinate conversion
 
-Analyse follows the scorer manifest to the generated inputs for the same batch. Supported geometry gives bin-centre positions in mm. For the current templates, 25 PDD bins span 50 mm with centres 1–49 mm; 300 profile bins span 600 mm with centres −299 to +299 mm.
+Collection registration follows the scorer manifest to the generated inputs for the same batch. Supported geometry gives bin-centre positions in mm. For the current templates, 25 PDD bins span 50 mm with centres 1–49 mm; 300 profile bins span 600 mm with centres −299 to +299 mm.
 
 Those values are examples derived from the current template geometry, not universal conversions. Inspect the displayed source or confirm an explicit mapping when detection cannot resolve an old/custom output. [Inference rules →](analyse-behaviour-spec.md#geometry-detection)
 
 ## Provenance and preservation
 
 Keep SQLite metadata, generated inputs, raw CSVs/logs, collection manifests and the selected collection timestamp together. Retain relevant mapping sidecars for repeatable analysis. A scorer-processing failure may leave partial files and does not advance the previous successful latest pointers. Final marker/DB/history updates are sequential, so a later finalization failure can leave them inconsistent. Review failed attempts before treating their files as completed collections.
+
+## Saved datasets
+
+The configured SQLite database also holds `saved_datasets`, `saved_curves`, `saved_samples` and `saved_originals`. Analyse reads these snapshots. Original file bytes and numeric values are retained; coordinate mapping converts known units to mm, and raw cGy to Gy, during analysis. Unknown uncertainty is stored as SQL NULL. Metadata and mapping corrections are recorded with the curve. [Import and persistence details](import-guide.md).

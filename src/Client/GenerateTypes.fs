@@ -8,6 +8,7 @@ type Page =
     | Generate
     | Run
     | Collect
+    | Import
     | Analyse
     | RunControl
 

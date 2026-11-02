@@ -22,9 +22,12 @@
     <Compile Include="RunControlProbe.fs" />
     <Compile Include="CollectCsvMerge.fs" />
     <Compile Include="CollectStatistics.fs" />
-    <Compile Include="CollectOperation.fs" />
     <Compile Include="AnalysisInput.fs" />
     <Compile Include="AnalysisOperation.fs" />
+    <Compile Include="CurveImport.fs" />
+    <Compile Include="DatasetStore.fs" />
+    <Compile Include="DatasetOperation.fs" />
+    <Compile Include="CollectOperation.fs" />
     <Compile Include="SqliteInit.fs" />
     <Compile Include="RunControlOperation.fs" />
     <Compile Include="Server.fs" />

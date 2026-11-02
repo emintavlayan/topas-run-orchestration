@@ -62,25 +62,20 @@ let private optionLabel key options = options |> List.find (fun (value,_) -> val
 /// Maps stored coordinates onto the physical axis.
 let private physical selected =
     selected.Curve.Points
-    |> List.map (fun p -> {p with Position=selected.Mapping.OriginMm+selected.Mapping.StepMm*p.Position})
+    |> List.map (fun p ->
+        let scale = if selected.Curve.ValueUnit="cGy" then 0.01 else 1.
+        {p with Position=selected.Mapping.OriginMm+selected.Mapping.StepMm*p.Position;Dose=p.Dose*scale;Uncertainty=p.Uncertainty*scale})
     |> List.sortBy _.Position
 
 /// Extracts the run identifier from a collected output path.
 let private label (dataset: AnalysisDataset) = dataset.Id.Split('/').[0]
 
-/// Identifies the run and scorer when reporting an individual dataset failure.
-let private scorerLabel (dataset: AnalysisDataset) =
-    let parts = dataset.Id.Split('/')
-    if parts.Length>=3 then parts.[0]+"/"+parts.[parts.Length-2] else dataset.Label
+/// Identifies one saved curve in messages and exports.
+let private scorerLabel (dataset: AnalysisDataset) = dataset.Label
 
-/// Extracts a collection timestamp while supporting historical unversioned outputs.
-let private collection (dataset: AnalysisDataset) =
-    let parts = dataset.Id.Split('/')
-    if parts.Length >= 3 then parts.[1] else ""
-
-/// Groups one run's scorers into complete collection choices, newest first.
-let private collections runId (datasets: AnalysisDataset list) =
-    datasets |> List.filter (fun d -> label d=runId) |> List.groupBy collection |> List.sortByDescending fst
+/// Resolves the common raw dose unit after conversion of cGy to Gy.
+let private rawUnit (curve: AnalysisCurve) =
+    if curve.ValueUnit="Gy" || curve.ValueUnit="cGy" then "Gy" else curve.ValueUnit
 
 /// Normalizes each role using its own settings and confirmed geometry.
 let private prepare profileMode pddMode count position selected =
@@ -111,7 +106,7 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
                         Html.tr [
                             Html.td [prop.title s.Curve.Dataset.Id; prop.children [
                                 Html.span [prop.className "analysis-dot"; prop.style [style.backgroundColor (AnalysisPlot.color s.Curve.Dataset.Id)]]
-                                Html.span (label s.Curve.Dataset)]]
+                                Html.span s.Curve.Dataset.Label]]
                             for key,_ in headers do
                                 let value = Map.tryFind key values |> Option.flatten
                                 let display = if key="FWHM (mm)" then sprintf "%.0f" else Analysis.displayNumber
@@ -121,10 +116,8 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
 [<ReactComponent>]
 let View () =
     let api = React.useMemo((fun () -> Api.makeProxy<ITopasApi>()), [||])
-    let datasets,setDatasets = React.useState<AnalysisDataset list>([])
+    let savedDatasets,setSavedDatasets = React.useState<SavedDatasetSummary list>([])
     let selected,setSelected = React.useStateWithUpdater<Selection list>([])
-    let selectedRuns,setSelectedRuns = React.useStateWithUpdater<string list>([])
-    let collectionChoices,setCollectionChoices = React.useStateWithUpdater<Map<string,string>>(Map.empty)
     let drafts,setDrafts = React.useStateWithUpdater<Map<string,AnalysisMapping>>(Map.empty)
     let error,setError = React.useState("")
     let busy,setBusy = React.useState(false)
@@ -155,29 +148,22 @@ let View () =
             try do! operation with ex -> setError ex.Message
             setBusy false
         } |> Async.StartImmediate
-    /// Refreshes collected output discovery.
+    /// Refreshes saved dataset versions without rediscovering filesystem curves.
     let refresh () = run (async {
-        let! result = api.listAnalysisDatasets()
-        match result with Ok values -> setDatasets values | Error message -> setError message })
+        let! result = api.getSavedDatasets()
+        match result with Ok values -> setSavedDatasets values | Error message -> setError message })
     React.useEffectOnce refresh
-    let runs = datasets |> List.map label |> List.distinct |> List.sortDescending
-    /// Uses an explicit collection choice or the latest available collection for a run.
-    let currentCollection runId =
-        let available = collections runId datasets
-        match Map.tryFind runId collectionChoices with
-        | Some key when available |> List.exists (fun (id,_) -> id=key) -> Some key
-        | _ -> available |> List.tryHead |> Option.map fst
-    /// Discards manual edits for one run without changing its active geometry.
-    let discardRunDrafts runId =
-        setDrafts (fun values -> values |> Map.filter (fun id _ -> id.Split('/').[0]<>runId))
-    /// Removes a run and its loaded scorers from the comparison.
-    let removeRun runId =
-        setSelectedRuns (fun values -> values |> List.filter ((<>) runId))
-        setSelected (fun values -> values |> List.filter (fun s -> label s.Curve.Dataset<>runId))
-        discardRunDrafts runId
-    /// Loads every scorer from exactly one collection of the selected run.
-    let loadRun runId collectionId = run (async {
-        let outputs = collections runId datasets |> List.tryFind (fun (key,_) -> key=collectionId) |> Option.map snd |> Option.defaultValue []
+    let datasets = savedDatasets |> List.collect _.Curves
+    let selectedRuns = selected |> List.map (fun s -> label s.Curve.Dataset) |> List.distinct
+    /// Discards manual edits for one dataset without changing active geometry.
+    let discardRunDrafts datasetId =
+        setDrafts (fun values -> values |> Map.filter (fun id _ -> id.Split('/').[0]<>datasetId))
+    /// Removes a dataset and its loaded curves from the comparison.
+    let removeRun datasetId =
+        setSelected (fun values -> values |> List.filter (fun s -> label s.Curve.Dataset<>datasetId))
+        discardRunDrafts datasetId
+    /// Loads the explicitly requested saved curves and surfaces individual failures.
+    let loadCurves datasetId (outputs: AnalysisDataset list) replace = run (async {
         let! results = outputs |> List.map (fun dataset -> async {
             let! result = api.loadAnalysisCurve dataset.Id
             return dataset,result }) |> Async.Parallel
@@ -187,21 +173,24 @@ let View () =
             | Ok curve ->
                 let mapping = curve.Mapping |> Option.defaultValue {Role="PDD";Axis=2;StepMm=1.0;OriginMm=0.0;CaxMm=0.0;Confirmed=false}
                 Some {Curve=curve;Mapping=mapping}) |> Array.toList
-        setSelected (fun values -> (values |> List.filter (fun s -> label s.Curve.Dataset<>runId)) @ loaded)
-        setSelectedRuns (fun values -> if List.contains runId values then values else values @ [runId])
-        setCollectionChoices (Map.add runId collectionId)
-        discardRunDrafts runId
-        if selectedRuns.IsEmpty then
+        setSelected (fun values ->
+            let retained = values |> List.filter (fun s -> if replace then label s.Curve.Dataset<>datasetId else not (outputs |> List.exists (fun d -> d.Id=s.Curve.Dataset.Id)))
+            retained @ loaded)
+        if replace then discardRunDrafts datasetId
+        if selected.IsEmpty then
             setRoleFilter (if loaded |> List.exists (fun s -> s.Mapping.Role="X profile" || s.Mapping.Role="Y profile") then "Profiles" else "PDD")
         let failures = results |> Array.choose (fun (d,result) -> match result with Error message -> Some (d.Label+": "+message) | Ok _ -> None)
         setError (String.concat "\n" failures) })
-    /// Toggles a run using its current or latest collection.
-    let toggleRun runId =
-        if List.contains runId selectedRuns then removeRun runId
-        else
-            match currentCollection runId with
-            | Some key -> loadRun runId key
-            | None -> setError "No collected outputs for this run."
+    /// Toggles all curves in one saved dataset version.
+    let toggleRun datasetId =
+        if List.contains datasetId selectedRuns then removeRun datasetId
+        else loadCurves datasetId (datasets |> List.filter (fun d -> label d=datasetId)) true
+    /// Toggles one independently selected scan within a saved dataset.
+    let toggleCurve (dataset: AnalysisDataset) =
+        if selected |> List.exists (fun s -> s.Curve.Dataset.Id=dataset.Id) then
+            setSelected (fun values -> values |> List.filter (fun s -> s.Curve.Dataset.Id<>dataset.Id))
+            setDrafts (Map.remove dataset.Id)
+        else loadCurves (label dataset) [dataset] false
     /// Changes a manual draft while keeping the resolved geometry active.
     let editMapping s change =
         let id = s.Curve.Dataset.Id
@@ -242,10 +231,10 @@ let View () =
     /// Returns curve metrics from the complete physical samples.
     let metrics s = Analysis.metricsWithConventions s.Mapping.Role flatnessDefinition symmetryDefinition region s.Mapping.CaxMm (physical s)
     let curveExport =
-        [yield "dataset,role,position_mm,dose,scaled_absolute_uncertainty,normalization,central_points,CAX_mm"
+        [yield "dataset,role,position_mm,dose,dose_unit,scaled_absolute_uncertainty,normalization,central_points,CAX_mm"
          for s,points in processed do
              for p in points do
-                 yield csvRow [s.Curve.Dataset.Label;s.Mapping.Role;format p.Position;format p.Dose;format p.Uncertainty;modeFor s.Mapping.Role
+                 yield csvRow [s.Curve.Dataset.Label;s.Mapping.Role;format p.Position;format p.Dose;(if modeFor s.Mapping.Role="None" then rawUnit s.Curve else "%");(if s.Curve.HasUncertainty then format p.Uncertainty else "");modeFor s.Mapping.Role
                                (if modeFor s.Mapping.Role="Central mean" then string count else "");format s.Mapping.CaxMm]] |> String.concat "\n"
     let metricExport =
         [yield "dataset,role,metric,value,flatness_definition,symmetry_definition,evaluation_fraction,CAX_mm"
@@ -260,46 +249,45 @@ let View () =
         else s.Mapping.Role="PDD")
     let plotted = visible |> List.map (fun (s,points) ->
         let curve: AnalysisPlot.Curve =
-            {Id=s.Curve.Dataset.Id; Label=label s.Curve.Dataset; Role=s.Mapping.Role
+            {Id=s.Curve.Dataset.Id; Label=s.Curve.Dataset.Label; Role=s.Mapping.Role; HasUncertainty=s.Curve.HasUncertainty
              Points=points |> List.filter (fun p -> not customBounds || (p.Position>=xmin && p.Position<=xmax))}
         curve)
     let normalization = modeLabel (if roleFilter="PDD" then "PDD" else "X profile")
     let raw = modeFor (if roleFilter="PDD" then "PDD" else "X profile")="None"
-    let unitName = if raw then "Dose [Gy]" else "Relative dose [%]"
+    let rawUnits = visible |> List.map (fun (s,_) -> rawUnit s.Curve) |> List.distinct
+    let incompatibleUnits = raw && rawUnits.Length>1
+    let unitName = if raw then "Dose ["+(rawUnits |> List.tryHead |> Option.defaultValue "unknown")+"]" else "Relative dose [%]"
     /// Renders a CSV download for currently processed datasets.
     let download (name: string) (text: string) (content: string) =
         Html.a [prop.className "analysis-button"; prop.download name
                 prop.href ("data:text/csv;charset=utf-8,"+Uri.EscapeDataString content); prop.text text]
     Html.div [prop.className "analysis-workspace"; prop.children [
         Html.aside [prop.className "analysis-runs"; prop.children [
-            Html.span [prop.className "text-sm font-semibold"; prop.text "Runs"]
+            Html.span [prop.className "text-sm font-semibold"; prop.text "Datasets"]
             Html.div [prop.className "analysis-run-choices"; prop.children [
-                if runs.IsEmpty && not busy then Html.span [prop.className "text-sm text-base-content/60"; prop.text "No collected runs."]
-                for runId in runs do
-                    let active = List.contains runId selectedRuns
-                    let available = collections runId datasets
-                    let current = currentCollection runId
+                if savedDatasets.IsEmpty && not busy then Html.span [prop.className "text-sm text-base-content/60"; prop.text "No saved datasets. Open Import to add files or existing collections."]
+                for dataset in savedDatasets do
+                    let active = List.contains dataset.Id selectedRuns
                     Html.details [prop.className (if active then "analysis-run active" else "analysis-run"); prop.children [
                         Html.summary [prop.children [
                             Html.input [prop.type' "checkbox"; prop.className "checkbox checkbox-xs"; prop.disabled busy
-                                        prop.custom ("aria-label","Include run "+runId); prop.isChecked active
+                                        prop.custom ("aria-label","Include dataset "+dataset.Name); prop.isChecked active
                                         prop.onClick (fun event -> event.stopPropagation())
-                                        prop.onChange (fun (_:bool) -> toggleRun runId)]
-                            Html.span [prop.className "analysis-dot"; prop.style [style.backgroundColor (AnalysisPlot.color runId)]]
-                            Html.span runId]]
-                        Html.div [prop.className "analysis-collection-list"; prop.children [
-                            for index,(key,_) in List.indexed available do
-                                let isCurrent = current = Some key
-                                Html.label [prop.className "analysis-collection"; prop.children [
-                                    Html.input [prop.type' "radio"; prop.name ("collection-"+runId); prop.className "radio radio-xs"
-                                                prop.disabled busy; prop.isChecked isCurrent
-                                                prop.onChange (fun (_:bool) -> if not busy then loadRun runId key)]
-                                    Html.span (if key="" then "Historical" else key)
-                                    if index=0 then Html.span [prop.className "text-base-content/50 text-xs"; prop.text "Latest"]]]]]]]]]
+                                        prop.onChange (fun (_:bool) -> toggleRun dataset.Id)]
+                            Html.span dataset.Name]]
+                        Html.div [prop.className "analysis-collection-list";prop.children [
+                            Html.p [prop.className "text-xs text-base-content/60";prop.text (dataset.Source+" · "+(if dataset.CollectionKey="" then dataset.SavedAt else dataset.CollectionKey))]
+                            for curve in dataset.Curves do
+                                Html.label [prop.className "analysis-collection";prop.children [
+                                    Html.input [prop.type' "checkbox";prop.className "checkbox checkbox-xs";prop.disabled busy
+                                                prop.isChecked (selected |> List.exists (fun s -> s.Curve.Dataset.Id=curve.Id))
+                                                prop.onChange (fun (_:bool) -> toggleCurve curve)]
+                                    Html.span [prop.className "analysis-dot";prop.style [style.backgroundColor (AnalysisPlot.color curve.Id)]]
+                                    Html.span curve.Label]]]]]]]]
             Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text (if busy then "Loading…" else "Refresh"); prop.onClick (fun _ -> refresh())]
-            if not selectedRuns.IsEmpty then
+            if not selected.IsEmpty then
                 Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text "Clear"
-                             prop.onClick (fun _ -> setSelectedRuns (fun _ -> []); setSelected (fun _ -> []); setDrafts (fun _ -> Map.empty))]]]
+                             prop.onClick (fun _ -> setSelected (fun _ -> []); setDrafts (fun _ -> Map.empty))]]]
         Html.div [prop.className "analysis-main"; prop.children [
             Html.div [prop.className "analysis-toolbar"; prop.children [
                 Html.div [prop.className "flex gap-5"; prop.children [for title in ["Profiles";"Metrics";"Settings"] -> tab activeTab title setActiveTab]]
@@ -324,7 +312,9 @@ let View () =
                                          prop.text role; prop.onClick (fun _ -> setRoleFilter role)]]]
                     Html.span [prop.className "text-xs text-base-content/60"; prop.text normalization]]]
                 if selected.IsEmpty then
-                    Html.div [prop.className "analysis-empty"; prop.text "Select runs."]
+                    Html.div [prop.className "analysis-empty"; prop.text "Select datasets or individual curves."]
+                elif incompatibleUnits then
+                    Html.div [prop.className "analysis-empty";prop.text "Selected raw curves have incompatible value units. Choose normalization in Settings or select compatible curves."]
                 elif customBounds && xmin>=xmax then
                     Html.div [prop.className "analysis-empty"; prop.text "Plot minimum must be below maximum. Change bounds in Settings."]
                 else
@@ -335,7 +325,7 @@ let View () =
             elif activeTab="Metrics" then
                 Html.div [prop.className "space-y-6 p-4"; prop.children [
                     Html.p [prop.className "text-xs text-base-content/60"; prop.text (String.concat " · " [optionLabel flatness flatnessOptions; optionLabel symmetry symmetryOptions; "Point region "+Analysis.displayNumber (100.0*region)+"%"])]
-                    if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "No metrics available for the selected runs."]
+                    if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "No metrics available for the selected datasets."]
                     for role in ["X profile";"Y profile";"PDD"] do
                         let curves = processed |> List.filter (fun (s,_) -> s.Mapping.Role=role)
                         if not curves.IsEmpty then metricTable role flatnessDefinition symmetryDefinition region curves]]
@@ -372,11 +362,11 @@ let View () =
                             Html.details [prop.className "analysis-mapping"; prop.children [
                                 Html.summary [prop.children [
                                     Html.span $"{scorerLabel s.Curve.Dataset} · {s.Mapping.Role}"
-                                    Html.span [prop.className "analysis-mapping-status"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "From inputs" else "Override")]]]
+                                    Html.span [prop.className "analysis-mapping-status"; prop.text (if not s.Mapping.Confirmed then "Unavailable" elif source.StartsWith("Derived") then "Imported geometry" else "Override")]]]
                                 Html.div [prop.className "analysis-mapping-body"; prop.children [
                                     Html.p [prop.className "text-xs break-words text-base-content/60"; prop.text source]
                                     if s.Mapping.Confirmed && not (source.StartsWith("Derived")) then
-                                        Html.button [prop.className "analysis-button"; prop.disabled busy; prop.text "Restore from inputs"; prop.onClick (fun _ -> useInputs s)]
+                                        Html.button [prop.className "analysis-button"; prop.disabled busy; prop.text "Restore imported geometry"; prop.onClick (fun _ -> useInputs s)]
                                     if editing then
                                         Html.div [prop.className "analysis-mapping-fields"; prop.children [
                                             choice "Role" mapping.Role (["PDD";"X profile";"Y profile"] |> List.map (fun v -> v,v)) (fun v -> editMapping s (fun m -> {m with Role=v}))
@@ -401,7 +391,7 @@ let View () =
                             Html.p "Symmetry: IEC / Elekta = 100 max(DL/DR, DR/DL); Varian = 100 max|DL−DR|/D(CAX); IAEA = 100 (AL−AR)/(AL+AR)."
                             Html.p "Point metrics: symmetric CAX region, limited by the nearer 50% peak-dose edge. IAEA area: CAX to each 50% CAX-dose edge. No smoothing."
                             Html.p "Convention names identify equations. Electron acceptance protocols also specify depth, reference dose and evaluation region; these settings do not select a complete acceptance protocol."
-                            Html.p "Central mean uses the nearest N samples about CAX, with lower position breaking ties. Uncertainty scales by the fixed normalization factor. Raw dose is summed Gy."
+                            Html.p "Central mean uses the nearest N samples about CAX, with lower position breaking ties. Uncertainty scales by the fixed normalization factor. Raw cGy values are converted to Gy; incompatible raw units cannot share a plot."
                             Html.p "R50 is dose-based. Metrics use the full curve. Missing values are shown as —."
                             Html.a [prop.className "link"; prop.href "https://static.standardimaging.com/referenced-manuals/80614-11-DoseView-MNL.pdf#page=131"; prop.target "_blank"; prop.rel "noreferrer"; prop.text "DoseView · Table 16-2"]
                             Html.br []

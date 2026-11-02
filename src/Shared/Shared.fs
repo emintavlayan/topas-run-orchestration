@@ -263,6 +263,7 @@ type CollectResult = {
     MergedFiles: CollectedPhaseSpaceResult list
     ManifestPath: string
     Status: string
+    DatasetRegistration: Result<string, string>
 }
 
 type AppConfigView = {
@@ -280,9 +281,82 @@ type AnalysisMapping = { Role: string; Axis: int; StepMm: float; OriginMm: float
 /// Represents a sampled dose and its absolute statistical uncertainty.
 type AnalysisPoint = { Position: float; Dose: float; Uncertainty: float }
 /// Represents a collected curve with its saved coordinate mapping.
-type AnalysisCurve = { Dataset: AnalysisDataset; Mapping: AnalysisMapping option; MappingSource: string; Points: AnalysisPoint list }
+type AnalysisCurve = { Dataset: AnalysisDataset; Mapping: AnalysisMapping option; MappingSource: string; Points: AnalysisPoint list; ValueUnit: string; HasUncertainty: bool }
 /// Represents a request to save a physical mapping beside a collected curve.
 type SaveAnalysisMapping = { Id: string; Mapping: AnalysisMapping }
+
+/// Represents editable acquisition metadata; empty optional fields mean unknown.
+type CurveMetadata = {
+    Name: string
+    Role: string
+    PositionUnit: string
+    ValueUnit: string
+    DepthMm: string
+    SsdMm: string
+    FieldXmm: string
+    FieldYmm: string
+    AcquisitionDate: string
+}
+
+/// Represents the original scan identity and recorded manual corrections.
+type CurveProvenance = {
+    FileIndex: int
+    OriginalFile: string
+    ScanId: string
+    ParserVersion: string
+    Corrections: string list
+}
+
+/// Represents original numeric samples independently of vendor file structure.
+type DatasetCurve = {
+    Id: string
+    Metadata: CurveMetadata
+    Provenance: CurveProvenance
+    Mapping: AnalysisMapping
+    MappingSource: string
+    HasUncertainty: bool
+    Points: AnalysisPoint list
+}
+
+/// Represents an original uploaded file preserved byte for byte.
+type ImportFile = { Name: string; ContentBase64: string }
+
+/// Represents parsed curves awaiting explicit metadata review.
+type ImportPreview = { Files: ImportFile list; Curves: DatasetCurve list }
+
+/// Represents a saved dataset version and its curve identities.
+type SavedDatasetSummary = {
+    Id: string
+    Name: string
+    Source: string
+    AcquisitionDate: string
+    SavedAt: string
+    CollectionKey: string
+    Revision: int
+    Curves: AnalysisDataset list
+}
+
+/// Represents a dataset loaded for metadata review.
+type SavedDataset = { Summary: SavedDatasetSummary; Curves: DatasetCurve list }
+
+/// Represents a reviewed import; the server reparses originals before saving samples.
+type SaveDatasetRequest = { Name: string; Source: string; AcquisitionDate: string; Confirmed: bool; Preview: ImportPreview }
+
+/// Represents a metadata edit guarded by the dataset revision.
+type UpdateDatasetRequest = {
+    Id: string
+    Revision: int
+    Name: string
+    Source: string
+    AcquisitionDate: string
+    Curves: (string * CurveMetadata) list
+}
+
+/// Identifies a dataset version for guarded deletion.
+type DeleteDatasetRequest = { Id: string; Revision: int }
+
+/// Identifies an archived original for download.
+type DatasetFileRequest = { DatasetId: string; FileIndex: int }
 
 /// Represents the observed state of a single PHSP task.
 [<RequireQualifiedAccess>]
@@ -339,6 +413,15 @@ type RunControlSnapshot = {
 type RunControlLogRequest = { SeedBase: string; RunId: string }
 
 type ITopasApi = {
+    getSavedDatasets: unit -> Async<Result<SavedDatasetSummary list, string>>
+    getSavedDataset: string -> Async<Result<SavedDataset, string>>
+    previewImport: ImportFile list -> Async<Result<ImportPreview, string>>
+    saveImportedDataset: SaveDatasetRequest -> Async<Result<SavedDatasetSummary, string>>
+    updateSavedDataset: UpdateDatasetRequest -> Async<Result<unit, string>>
+    deleteSavedDataset: DeleteDatasetRequest -> Async<Result<unit, string>>
+    getDatasetOriginal: DatasetFileRequest -> Async<Result<ImportFile, string>>
+    listCollectedDatasets: unit -> Async<Result<AnalysisDataset list, string>>
+    importCollectedDataset: string -> Async<Result<SavedDatasetSummary, string>>
     getRunControlBatches: unit -> Async<Result<RunBatchSummary list, string>>
     getRunControl: string -> Async<Result<RunControlSnapshot, string>>
     getRunControlLog: RunControlLogRequest -> Async<Result<string, string>>

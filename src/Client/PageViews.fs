@@ -62,6 +62,7 @@ let viewWorkflowNavigation (model: Model) (dispatch: Msg -> unit) =
             topNavButton model.SelectedPage Run dispatch
             topNavButton model.SelectedPage RunControl dispatch
             topNavButton model.SelectedPage Collect dispatch
+            topNavButton model.SelectedPage Import dispatch
             topNavButton model.SelectedPage Analyse dispatch
         ]
     ]
@@ -130,6 +131,7 @@ let viewPageContent (model: Model) (dispatch: Msg -> unit) =
 
         viewRunPage appRoot model.Run dispatch
     | Collect -> viewCollectPage model.Collect dispatch
+    | Import -> ImportViews.View ()
     | Analyse -> AnalysisViews.View ()
     | RunControl -> RunControlViews.View ()
 

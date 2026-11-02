@@ -2,13 +2,13 @@
 
 [README](../README.md) · [All documentation](index.md)
 
-Analyse reads collected results directly from the server.
+Analyse reads saved measurement and simulation datasets from SQLite. Use [Import](import-guide.md) for measurement files and historical collections. New Collect operations register automatically when their scorers support 1D analysis.
 
 ## A first comparison
 
-1. Open **Analyse**. Select run IDs in the left sidebar. Each run's colour identifies its curves; there is no separate plot legend. Expand a run (for example **1114**) to see all collection folders, newest first; the latest is selected by default. Use **Refresh** to discover new collections.
-2. **Profiles** shows X and Y together: X is solid, Y is dashed. Use **X**, **Y** or **PDD** to isolate a role. Choosing a run loads every scorer from one collection together; changing the collection replaces that run’s curves. Collections are never mixed automatically.
-3. Geometry derived from the archived inputs is used immediately, with no confirmation. **Settings → Geometry** shows its source and values. If inference fails, the curve reports **Geometry unavailable**; choose **Enter manual values**, edit the mapping, then **Save values** only when needed. Manual edits remain drafts until saved; **Cancel** keeps the active geometry. A saved override takes precedence over input inference. Use **Settings → Geometry → Restore from inputs** to restore input-derived geometry; the existing override is backed up only after inference succeeds.
+1. Open **Analyse**. Select saved datasets in the left sidebar; expand a dataset to select individual curves. Each collection version is an independent dataset. Use **Refresh** to update the list.
+2. **Profiles** shows X and Y together: X is solid, Y is dashed. Use **X**, **Y** or **PDD** to isolate a role. Selecting several datasets overlays their curves; no versions are silently replaced.
+3. **Settings → Geometry** shows the mapping snapshot saved at import/registration. Confirmed mappings are active immediately. If geometry is unavailable, edit and save manual values. Saved overrides live in SQLite and leave raw samples unchanged. **Restore imported geometry** restores the initial confirmed snapshot; it does not rerun input inference.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
 5. Open **Metrics** for one row per dataset and one column per metric.
 6. Choose **Export Curves** or **Export Metrics** from the toolbar.
@@ -21,7 +21,7 @@ Analyse reads collected results directly from the server.
 | Maximum | Each curve's sampled maximum |
 | CAX | Interpolated dose at that profile's CAX |
 | At position | Interpolated dose at the chosen position/depth in mm |
-| None | Raw summed dose in Gy |
+| None | Raw dose in its declared units; cGy converted to Gy |
 
 Central mean defaults to 10 samples. For the current centred 2 mm profile grid, these are −9, −7, …, +9 mm, matching the earlier mean within ±1 cm. Five points selects the nearest five samples. Equal-distance ties use the lower position. The requested count must exist and include samples on both sides of CAX; CAX must lie within the sampled profile. There is no fallback to fewer samples or another normalization.
 
@@ -47,7 +47,7 @@ These names identify equations. They do not select a complete vendor acceptance 
 
 ## Plot and results
 
-The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing runs, collections, view, normalization or bounds initializes a fresh chart. Run colours in the sidebar identify curves; X is solid and Y is dashed. No bottom legend is shown.
+The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing curves, view, normalization or bounds initializes a fresh chart. Curve colours in the sidebar identify curves; X is solid and Y is dashed. No bottom legend is shown.
 
 **Settings → Plot** controls uncertainty bands, sample markers and horizontal bounds. Selected runs are overlaid directly in Profiles, X, Y and PDD views.
 
@@ -63,10 +63,8 @@ Metrics always use the complete curve. Plot bounds and interactive zoom do not l
 
 R50 is dose-based, not an I50 conversion. No smoothing or peak fitting is applied. Finite sampling and missing edge/depth coverage limit available metrics.
 
-Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export Curves includes role, normalization, central sample count and CAX; Export Metrics includes role, equations, evaluation fraction and CAX. Keep the source collection and mapping sidecars for provenance.
+Uncertainty bands scale the CSV's absolute statistical uncertainty by the same fixed factor as dose. Normalization uncertainty and covariance are not propagated. Export Curves includes role, normalization, central sample count and CAX; Export Metrics includes role, equations, evaluation fraction and CAX. Original files, samples, metadata and mapping corrections are archived in SQLite. Missing uncertainty is blank in exports and produces no uncertainty band.
 
-Supported now: collected 1D scorers, generated-input geometry inference, explicit overrides, overlays, metrics and CSV export. Multidimensional scorers require explicit extraction. Measured-data import, 3D slicing, gamma and derived-metric uncertainty propagation remain future work.
+Supported now: saved 1D simulation/measurement curves, input-geometry inference at collection registration, explicit overrides, overlays, metrics and CSV export. See [Import formats and limits](import-guide.md). Multidimensional scorers require explicit extraction. 3D slicing, gamma and derived-metric uncertainty propagation remain future work.
 
-For an incorrectly saved `default` mapping, choose **Settings → Geometry → run/default → Restore from inputs**. Current manifests identify the input scorer by its exact source CSV path, including unsuffixed outputs. Restoring inputs fails explicitly if no unique input scorer matches; the program does not infer a role solely from sample count.
-
-Settings separates Normalization, Metrics, Plot and Geometry into bordered sections. Geometry entries expand independently. Action buttons are outlined: **Enter manual values**, **Save values**, **Cancel** and **Restore from inputs**.
+For an incorrect saved mapping, enter manual values under Settings → Geometry, or restore its imported snapshot. To derive geometry again from corrected archived inputs, register a new collection version.
