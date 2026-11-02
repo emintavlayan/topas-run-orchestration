@@ -80,17 +80,28 @@ let private mcc fileIndex (name: string) (text: string) = result {
     do! Result.requireTrue "No complete BEGIN_SCAN/END_SCAN blocks were found." (not blocks.IsEmpty)
     let starts = Regex.Matches(text,@"(?m)^\s*BEGIN_SCAN\s+\d+\s*$").Count
     do! Result.requireTrue "Incomplete scan blocks; import was stopped." (starts=blocks.Length)
+    let knownFormat = Regex.IsMatch(text,@"(?m)^\s*FORMAT=CC-Export V1\.9[ \t\r]*$")
     return! blocks |> List.traverseResultM (fun block -> result {
         let scanId,body = block.Groups[1].Value,block.Groups[2].Value
         let data = Regex.Matches(body,@"(?ms)^\s*BEGIN_DATA\s*$([\s\S]*?)^\s*END_DATA\s*$")
         do! Result.requireTrue $"Scan {scanId} requires exactly one complete data block." (data.Count=1)
         let parameters = Regex.Matches(body,@"(?m)^\s*([A-Z_]+)\s*=\s*([^\r\n]+)") |> Seq.cast<Match> |> Seq.map (fun m -> m.Groups[1].Value,m.Groups[2].Value.Trim()) |> Map.ofSeq
         let role = match Map.tryFind "SCAN_CURVETYPE" parameters with Some "PDD" -> "PDD" | Some "CROSSPLANE_PROFILE" -> "X profile" | Some "INPLANE_PROFILE" -> "Y profile" | _ -> ""
-        let metadata = {Datasets.emptyMetadata ($"{Path.GetFileNameWithoutExtension name} · scan {scanId}") with Role=role}
+        let! depth=VendorImport.geometry 1. parameters "SCAN_DEPTH"
+        let! ssd=VendorImport.geometry 1. parameters "SSD"
+        let! fieldX=VendorImport.geometry 1. parameters "FIELD_CROSSPLANE"
+        let! fieldY=VendorImport.geometry 1. parameters "FIELD_INPLANE"
+        let dateText=Map.tryFind "MEAS_DATE" parameters |> Option.defaultValue ""
+        let metadata = {Datasets.emptyMetadata ($"{Path.GetFileNameWithoutExtension name} · scan {scanId}") with
+                            Role=role;PositionUnit=(if knownFormat then "mm" else "");ValueUnit=""
+                            DepthMm=(if knownFormat then depth else "");SsdMm=(if knownFormat then ssd else "")
+                            FieldXmm=(if knownFormat then fieldX else "");FieldYmm=(if knownFormat then fieldY else "")
+                            AcquisitionDate=VendorImport.date [|"dd-MMM-yyyy HH:mm:ss"|] dateText}
         let rows = data[0].Groups[1].Value.Replace("\r", "").Split('\n') |> Array.toList |> List.filter (String.IsNullOrWhiteSpace >> not)
         do! Result.requireTrue $"Scan {scanId}: additional MCC columns require a validated vendor parser; they are not interpreted as uncertainty." (rows |> List.forall (fun line -> (cells line).Length=2))
         let! points,uncertainty = samples rows
-        return draft fileIndex name scanId "mcc-blocks/1" metadata points uncertainty
+        let curve=draft fileIndex name scanId (if knownFormat then "mcc-cc-export-1.9/1" else "mcc-blocks/1") metadata points uncertainty
+        return {curve with MappingSource="MCC values have no declared dose unit. Confirm quantity/units. Geometry comes from scan metadata, not the filename; verify zero depth or conflicting field sizes."}
     })
 }
 
@@ -103,7 +114,10 @@ let preview files =
                 result {
                     let text = UTF8Encoding(false,true).GetString(bytes).TrimStart('\uFEFF')
                     let name = file.Name.Replace('\\','/') |> Path.GetFileName
-                    let! scans = if text.Contains("BEGIN_SCAN") then mcc index name text else delimited index name text
+                    let! scans =
+                        if text.StartsWith("Tab-Delimited Scan Output",StringComparison.Ordinal) then VendorImport.snc index name text
+                        elif text.Contains("BEGIN_SCAN") then mcc index name text
+                        else delimited index name text
                     return scans
                 } |> Result.mapError (fun message -> $"{file.Name}: {message}"))
             let scans = List.concat curves

@@ -24,6 +24,7 @@
     <Compile Include="CollectStatistics.fs" />
     <Compile Include="AnalysisInput.fs" />
     <Compile Include="AnalysisOperation.fs" />
+    <Compile Include="VendorImport.fs" />
     <Compile Include="CurveImport.fs" />
     <Compile Include="DatasetStore.fs" />
     <Compile Include="DatasetOperation.fs" />

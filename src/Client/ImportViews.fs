@@ -170,7 +170,7 @@ let View () =
             Html.input [prop.type' "file";prop.multiple true;prop.disabled busy
                         prop.className "file-input file-input-bordered file-input-sm w-full max-w-xl"
                         prop.onChange (fun (event: Browser.Types.Event) -> chooseFiles (event.target :?> Browser.Types.HTMLInputElement).files)]
-            Html.p [prop.className "text-xs text-base-content/60";prop.text "Dose text/CSV: position,value[,absolute uncertainty]. Headers can declare mm/cm and Gy/cGy/relative units. MCC scan blocks require explicit unit review. SNC vendor layouts await validation against actual examples. Maximum 20 files / 10 MB."]]]
+            Html.p [prop.className "text-xs text-base-content/60";prop.text "Dose text/CSV: position,value[,absolute uncertainty]. Headers can declare mm/cm and Gy/cGy/relative units. MCC scan blocks use declared geometry. SNC exported dose tables are supported. MCC quantities require confirmation. Maximum 20 files / 10 MB."]]]
         if error<>"" then Html.div [prop.className "alert alert-error text-sm";prop.custom ("role","alert");prop.text error]
         if notice<>"" then Html.div [prop.className "alert text-sm";prop.custom ("role","status");prop.text notice]
         if busy then Html.p [prop.className "text-sm";prop.text "Working…"]
@@ -204,6 +204,7 @@ let View () =
                             field "Field X [mm] (blank = unknown)" m.FieldXmm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with FieldXmm=value}))
                             field "Field Y [mm] (blank = unknown)" m.FieldYmm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with FieldYmm=value}))
                             field "Scan acquisition date (ISO; blank = unknown)" m.AcquisitionDate (fun value -> changeCurve curve.Id (fun metadata -> {metadata with AcquisitionDate=value}))]]
+                        Html.p [prop.className "text-xs text-warning";prop.text curve.MappingSource]
                         Html.p [prop.className "text-xs py-2 text-base-content/60";prop.text (curve.Provenance.OriginalFile+" · scan "+curve.Provenance.ScanId+" · parser "+curve.Provenance.ParserVersion+" · uncertainty: "+(if curve.HasUncertainty then "supplied" else "not supplied"))]
                         Html.div [prop.className "flex gap-2";prop.children [
                             button "Preview raw samples" busy (fun () -> setActive curve.Id)
@@ -217,7 +218,7 @@ let View () =
                     Html.div [prop.style [style.height 360];prop.children [
                         AnalysisPlot.view "Import preview" curve.Id ("Original position ["+(if curve.Metadata.PositionUnit="" then "unknown" else curve.Metadata.PositionUnit)+"]")
                             ("Original dose ["+(if curve.Metadata.ValueUnit="" then "unknown" else curve.Metadata.ValueUnit)+"]") false true
-                            [{Id=curve.Id;Label=curve.Metadata.Name;Role=curve.Metadata.Role;HasUncertainty=curve.HasUncertainty;Points=curve.Points}]]]
+                            [{Id=curve.Id;Label=curve.Metadata.Name;Role=curve.Metadata.Role;HasUncertainty=curve.HasUncertainty;Color=AnalysisPlot.color curve.Id;Points=curve.Points}]]]
                 | None -> Html.none
                 match original with
                 | Some file -> Html.a [prop.className "btn btn-outline btn-sm";prop.download (file.Name.Replace('\\','/').Split('/') |> Array.last);

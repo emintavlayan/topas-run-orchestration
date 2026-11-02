@@ -9,7 +9,7 @@ Collect, Import and Analyse use a common saved dataset containing named 1D curve
 1. Open **Import** and choose one or several files from your computer.
 2. Review detected curves. Uncheck scans you do not want to import. Expand each scan to edit its name, X/Y/PDD role, units, depth, SSD, field size and scan date. **Preview raw samples** displays the unnormalized original coordinates and values.
 3. Enter a dataset name and source. Missing dates and optional geometry stay explicitly unknown. Units and role are required. Confirm that values represent dose and that the reviewed metadata is correct.
-4. Choose **Import selected scans**. Open **Analyse** and select the saved dataset or individual curves.
+4. Choose **Import selected scans**. Open **Analyse** and select the complete run or measurement dataset.
 
 Normalization belongs to Analyse. Import does not smooth curves, average scans, normalize dose, convert ionization to dose or guess missing units. Coordinate transforms use mm; original values remain unchanged. Raw cGy is converted to Gy during analysis. Relative and absolute raw units cannot share a plot without normalization.
 
@@ -20,8 +20,8 @@ Normalization belongs to Analyse. Import does not smooth curves, average scans, 
 - Optional position headers: `position`, `position_mm`, `position_cm`, `depth_mm`, `x_mm`, `y_mm`.
 - Optional value headers: `dose`, `value`, `dose_Gy`, `dose_cGy`, `dose_percent`, `relative_dose`.
 - An optional uncertainty header is `uncertainty`, or `standard_uncertainty_Gy` / `standard_uncertainty_cGy` matching the dose unit.
-- MCC-style `BEGIN_SCAN n` / `END_SCAN n` blocks, each containing exactly one `BEGIN_DATA` / `END_DATA` block with **two numeric columns**. Unit confirmation is mandatory. This conservative structural reader has synthetic tests; it has not yet been validated against the user's actual MCC files. Additional columns are rejected because their meaning has not been established.
-- Native SNC vendor layouts are **pending actual examples and parser validation**. An arbitrary SNC text export is not assumed to follow the simple dose-column format.
+- MCC-style `BEGIN_SCAN n` / `END_SCAN n` blocks, each containing exactly one `BEGIN_DATA` / `END_DATA` block with **two numeric columns**. CC-Export V1.9 geometry is read in mm; dose quantity/units still require confirmation. This conservative structural reader has tests against the supplied scan structure. Additional columns are rejected because their meaning has not been established.
+- SNC tab-delimited exports: each complete scan must have one `BEGIN DOSE TABLE` with X/Y/Z in cm and Relative Dose (%). Geometry is converted to mm for analysis; original coordinates and dose values remain untouched. Depth scans require explicit `Is PDI to PDD=True`.
 
 For example, this CSV has known coordinates and dose units; review still requires a role:
 
@@ -60,4 +60,6 @@ git pull --ff-only
 dotnet test tests/Server.Tests/Server.Tests.fsproj
 ```
 
-Start the application with your normal development command. Register an existing collection, import a measurement CSV, compare X/Y/PDD, change normalization, export curves/metrics, edit metadata, download an original and delete a test version. The dataset tests cover byte preservation, server reparsing, failed review, scan boundaries, revision conflicts, deletion and historical snapshots. Actual MCC/SNC files are still needed for vendor compatibility testing.
+Start the application with your normal development command. Register an existing collection, import a measurement CSV, compare X/Y/PDD, change normalization, export curves/metrics, edit metadata, download an original and delete a test version. The dataset tests cover byte preservation, server reparsing, failed review, scan boundaries, revision conflicts, deletion and historical snapshots. Vendor metadata remains reviewable; filenames never override geometry.
+
+SNC scan dates use the export's month/day/year format; MCC measurement dates use day-month-name-year. File creation/export dates are not substituted for acquisition dates. SNC centering, symmetrizing, normalization and detector offsets are not reapplied. MCC files have no declared dose unit; the reviewer must identify the quantity. In the supplied examples both MCC filenames report 200 × 200 mm fields and zero scan depth in their headers; these values are retained for review. Statistics reports are not treated as sampled curves.

@@ -6,7 +6,7 @@ Analyse reads saved measurement and simulation datasets from SQLite. Use [Import
 
 ## A first comparison
 
-1. Open **Analyse**. Select saved datasets in the left sidebar; expand a dataset to select individual curves. Each collection version is an independent dataset. Use **Refresh** to update the list.
+1. Open **Analyse**. Select runs or measurement datasets in the left sidebar. A checkbox loads/removes the complete dataset; there are no individual profile checkboxes. Each collection version is an independent dataset. Use **Refresh** to update the list.
 2. **Profiles** shows X and Y together: X is solid, Y is dashed. Use **X**, **Y** or **PDD** to isolate a role. Selecting several datasets overlays their curves; no versions are silently replaced.
 3. **Settings → Geometry** shows the mapping snapshot saved at import/registration. Confirmed mappings are active immediately. If geometry is unavailable, edit and save manual values. Saved overrides live in SQLite and leave raw samples unchanged. **Restore imported geometry** restores the initial confirmed snapshot; it does not rerun input inference.
 4. Profiles default to **Central mean → 10 points**. PDD defaults to **Maximum**. Change these independently under **Settings → Normalization**.
@@ -47,7 +47,7 @@ These names identify equations. They do not select a complete vendor acceptance 
 
 ## Plot and results
 
-The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing curves, view, normalization or bounds initializes a fresh chart. Curve colours in the sidebar identify curves; X is solid and Y is dashed. No bottom legend is shown.
+The Plotly toolbar provides zoom, pan, zoom in/out, autoscale, reset axes and PNG download. Drag a rectangle or scroll to zoom; double-click to reset. The plot resizes with its container. Sample and uncertainty toggles preserve the current zoom; changing curves, view, normalization or bounds initializes a fresh chart. One colour in the sidebar identifies each run/dataset; X is solid and Y is dashed; X is solid and Y is dashed. No bottom legend is shown.
 
 **Settings → Plot** controls uncertainty bands, sample markers and horizontal bounds. Selected runs are overlaid directly in Profiles, X, Y and PDD views.
 

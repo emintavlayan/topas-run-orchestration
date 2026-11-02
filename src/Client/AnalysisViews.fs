@@ -88,7 +88,7 @@ let private prepare profileMode pddMode count position selected =
     }
 
 /// Renders one metric per column and one dataset per row.
-let private metricTable role flatness symmetry region (curves: (Selection * AnalysisPoint list) list) =
+let private metricTable colorFor role flatness symmetry region (curves: (Selection * AnalysisPoint list) list) =
     let headers =
         if role="PDD" then ["Sampled dmax (mm)","dmax [mm]"; "R90 (mm)","R90 [mm]"; "R80 (mm)","R80 [mm]"; "R50 (mm)","R50 [mm]"]
         else ["FWHM (mm)","FWHM [mm]"; "Left penumbra 20-80 (mm)","L 20–80 [mm]"; "Right penumbra 20-80 (mm)","R 20–80 [mm]"
@@ -105,7 +105,7 @@ let private metricTable role flatness symmetry region (curves: (Selection * Anal
                         let values = Analysis.metricsWithConventions role flatness symmetry region s.Mapping.CaxMm (physical s) |> Map.ofList
                         Html.tr [
                             Html.td [prop.title s.Curve.Dataset.Id; prop.children [
-                                Html.span [prop.className "analysis-dot"; prop.style [style.backgroundColor (AnalysisPlot.color s.Curve.Dataset.Id)]]
+                                Html.span [prop.className "analysis-dot"; prop.style [style.backgroundColor (colorFor s.Curve.Dataset.Id)]]
                                 Html.span s.Curve.Dataset.Label]]
                             for key,_ in headers do
                                 let value = Map.tryFind key values |> Option.flatten
@@ -153,6 +153,10 @@ let View () =
         let! result = api.getSavedDatasets()
         match result with Ok values -> setSavedDatasets values | Error message -> setError message })
     React.useEffectOnce refresh
+    /// Uses the same palette entry for a run's sidebar, metrics and all plotted roles.
+    let datasetColor (id: string) =
+        let key=id.Split('/')[0]
+        savedDatasets |> List.tryFindIndex (fun dataset -> dataset.Id=key) |> Option.defaultValue 0 |> AnalysisPlot.colorAt
     let datasets = savedDatasets |> List.collect _.Curves
     let selectedRuns = selected |> List.map (fun s -> label s.Curve.Dataset) |> List.distinct
     /// Discards manual edits for one dataset without changing active geometry.
@@ -185,12 +189,6 @@ let View () =
     let toggleRun datasetId =
         if List.contains datasetId selectedRuns then removeRun datasetId
         else loadCurves datasetId (datasets |> List.filter (fun d -> label d=datasetId)) true
-    /// Toggles one independently selected scan within a saved dataset.
-    let toggleCurve (dataset: AnalysisDataset) =
-        if selected |> List.exists (fun s -> s.Curve.Dataset.Id=dataset.Id) then
-            setSelected (fun values -> values |> List.filter (fun s -> s.Curve.Dataset.Id<>dataset.Id))
-            setDrafts (Map.remove dataset.Id)
-        else loadCurves (label dataset) [dataset] false
     /// Changes a manual draft while keeping the resolved geometry active.
     let editMapping s change =
         let id = s.Curve.Dataset.Id
@@ -249,7 +247,7 @@ let View () =
         else s.Mapping.Role="PDD")
     let plotted = visible |> List.map (fun (s,points) ->
         let curve: AnalysisPlot.Curve =
-            {Id=s.Curve.Dataset.Id; Label=s.Curve.Dataset.Label; Role=s.Mapping.Role; HasUncertainty=s.Curve.HasUncertainty
+            {Id=s.Curve.Dataset.Id; Label=s.Curve.Dataset.Label; Role=s.Mapping.Role; HasUncertainty=s.Curve.HasUncertainty; Color=datasetColor s.Curve.Dataset.Id
              Points=points |> List.filter (fun p -> not customBounds || (p.Position>=xmin && p.Position<=xmax))}
         curve)
     let normalization = modeLabel (if roleFilter="PDD" then "PDD" else "X profile")
@@ -263,27 +261,18 @@ let View () =
                 prop.href ("data:text/csv;charset=utf-8,"+Uri.EscapeDataString content); prop.text text]
     Html.div [prop.className "analysis-workspace"; prop.children [
         Html.aside [prop.className "analysis-runs"; prop.children [
-            Html.span [prop.className "text-sm font-semibold"; prop.text "Datasets"]
+            Html.span [prop.className "text-sm font-semibold"; prop.text "Runs"]
             Html.div [prop.className "analysis-run-choices"; prop.children [
                 if savedDatasets.IsEmpty && not busy then Html.span [prop.className "text-sm text-base-content/60"; prop.text "No saved datasets. Open Import to add files or existing collections."]
                 for dataset in savedDatasets do
                     let active = List.contains dataset.Id selectedRuns
-                    Html.details [prop.className (if active then "analysis-run active" else "analysis-run"); prop.children [
-                        Html.summary [prop.children [
-                            Html.input [prop.type' "checkbox"; prop.className "checkbox checkbox-xs"; prop.disabled busy
-                                        prop.custom ("aria-label","Include dataset "+dataset.Name); prop.isChecked active
-                                        prop.onClick (fun event -> event.stopPropagation())
-                                        prop.onChange (fun (_:bool) -> toggleRun dataset.Id)]
-                            Html.span dataset.Name]]
-                        Html.div [prop.className "analysis-collection-list";prop.children [
-                            Html.p [prop.className "text-xs text-base-content/60";prop.text (dataset.Source+" · "+(if dataset.CollectionKey="" then dataset.SavedAt else dataset.CollectionKey))]
-                            for curve in dataset.Curves do
-                                Html.label [prop.className "analysis-collection";prop.children [
-                                    Html.input [prop.type' "checkbox";prop.className "checkbox checkbox-xs";prop.disabled busy
-                                                prop.isChecked (selected |> List.exists (fun s -> s.Curve.Dataset.Id=curve.Id))
-                                                prop.onChange (fun (_:bool) -> toggleCurve curve)]
-                                    Html.span [prop.className "analysis-dot";prop.style [style.backgroundColor (AnalysisPlot.color curve.Id)]]
-                                    Html.span curve.Label]]]]]]]]
+                    let runName = if dataset.CollectionKey<>"" then dataset.CollectionKey.Split('/')[0] else dataset.Name
+                    Html.label [prop.className (if active then "analysis-run active flex items-center gap-2 p-2" else "analysis-run flex items-center gap-2 p-2");prop.title (dataset.Name+" · "+dataset.CollectionKey)
+                                prop.children [
+                                    Html.input [prop.type' "checkbox";prop.className "checkbox checkbox-xs";prop.disabled busy;prop.isChecked active
+                                                prop.onChange (fun (_:bool) -> toggleRun dataset.Id)]
+                                    Html.span [prop.className "analysis-dot";prop.style [style.backgroundColor (datasetColor dataset.Id)]]
+                                    Html.span runName]]]]
             Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text (if busy then "Loading…" else "Refresh"); prop.onClick (fun _ -> refresh())]
             if not selected.IsEmpty then
                 Html.button [prop.className "btn btn-ghost btn-xs"; prop.disabled busy; prop.text "Clear"
@@ -312,7 +301,7 @@ let View () =
                                          prop.text role; prop.onClick (fun _ -> setRoleFilter role)]]]
                     Html.span [prop.className "text-xs text-base-content/60"; prop.text normalization]]]
                 if selected.IsEmpty then
-                    Html.div [prop.className "analysis-empty"; prop.text "Select datasets or individual curves."]
+                    Html.div [prop.className "analysis-empty"; prop.text "Select runs or measurement datasets."]
                 elif incompatibleUnits then
                     Html.div [prop.className "analysis-empty";prop.text "Selected raw curves have incompatible value units. Choose normalization in Settings or select compatible curves."]
                 elif customBounds && xmin>=xmax then
@@ -328,7 +317,7 @@ let View () =
                     if processed.IsEmpty then Html.div [prop.className "analysis-empty"; prop.text "No metrics available for the selected datasets."]
                     for role in ["X profile";"Y profile";"PDD"] do
                         let curves = processed |> List.filter (fun (s,_) -> s.Mapping.Role=role)
-                        if not curves.IsEmpty then metricTable role flatnessDefinition symmetryDefinition region curves]]
+                        if not curves.IsEmpty then metricTable datasetColor role flatnessDefinition symmetryDefinition region curves]]
             else
                 Html.div [prop.className "analysis-settings"; prop.children [
                     Html.section [prop.className "analysis-settings-card"; prop.children [

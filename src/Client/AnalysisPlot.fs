@@ -7,7 +7,7 @@ open Feliz
 open Shared
 
 /// Represents a displayed curve with stable identity and line styling.
-type Curve = { Id: string; Label: string; Role: string; HasUncertainty: bool; Points: AnalysisPoint list }
+type Curve = { Id: string; Label: string; Role: string; HasUncertainty: bool; Color: string; Points: AnalysisPoint list }
 
 /// Imports the React component that manages the Plotly chart lifecycle.
 [<Import("default", "./AnalysisChart.jsx")>]
@@ -17,12 +17,15 @@ let private chartComponent: obj = jsNative
 [<Import("createElement", "react")>]
 let private createElement (component: obj, props: obj): Fable.React.ReactElement = jsNative
 
-/// Assigns a stable colour to each run across scorers and collection changes.
+/// Assigns distinct palette colours to the first twelve listed runs.
+let colorAt index =
+    let palette = [|"#2563eb";"#e05a36";"#009e73";"#a855f7";"#d18a00";"#0891b2";"#db2777";"#64748b";"#92400e";"#4d7c0f";"#4338ca";"#be123c"|]
+    palette.[index % palette.Length]
+
+/// Assigns a fallback colour to a standalone curve preview.
 let color (id: string) =
-    let key = id
-    let index = key |> Seq.fold (fun total c -> (total*31+int c)%8) 0
-    let palette = [|"#2563eb"; "#e05a36"; "#009e73"; "#a855f7"; "#d18a00"; "#0891b2"; "#db2777"; "#64748b"|]
-    palette.[index]
+    let index = id.Split('/')[0] |> Seq.fold (fun total c -> (total*31+int c)%12) 0
+    colorAt index
 
 /// Converts a run colour to a translucent uncertainty fill.
 let private fillColor (hex: string) =
@@ -34,7 +37,7 @@ let private fillColor (hex: string) =
 /// Builds paired uncertainty boundaries followed by the dose trace.
 let private traces bands samples valueFormat (curve: Curve) =
     let positions = curve.Points |> List.map _.Position |> List.toArray
-    let stroke = color curve.Id
+    let stroke = curve.Color
     [|
         if bands && curve.HasUncertainty then
             for direction in [-1.0;1.0] do

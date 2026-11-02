@@ -70,3 +70,7 @@ Live overview regression coverage checks current/upcoming runs on configured nod
 
 
 `DatasetTests.fs` covers exact original bytes, server-side reparsing rather than trusting preview samples, required metadata and confirmation, invalid scans, independent imports, metadata revision conflicts, cascading deletion, bounded MCC scan identity and historical collection snapshots. Server and client compilation pass under .NET SDK 8.0.420. All 74 server Fact methods, including the dataset tests, pass through direct invocation with xUnit assertions. VSTest crashes in this environment; Fable compilation is blocked by subprocess process inspection. Run `dotnet test tests/Server.Tests/Server.Tests.fsproj` locally for standard-runner verification. Native MCC/SNC compatibility still requires actual measurement exports.
+
+## Vendor import validation
+
+SNC relative-dose table and MCC CC-Export V1.9 metadata regression tests bring the server suite to 84 passing Fact methods by direct invocation. Both client and server compile. The two supplied SNC files parse as one scan each (1001 X-profile and 102 PDD samples); each supplied MCC file parses as four independent scans. No vendor originals are added to the public repository. Browser/Fable validation remains pending.

@@ -108,3 +108,32 @@ let ``Historical collection registration is idempotent and snapshots the origina
     Assert.NotEmpty(changed.Curves.Head.Provenance.Corrections)
     Assert.Equal(2,changed.Summary.Revision)
     Assert.True(Result.isError(DatasetStore.loadAnalysisCurve settings "../../secret.csv")))
+
+/// Checks SNC dose-table metadata and cm coordinates without reapplying vendor processing.
+[<Fact>]
+let ``SNC dose table retains original dose values and explicit geometry`` () =
+    let text="Tab-Delimited Scan Output\nFile Scan Count\t1\nBEGIN SCAN\nIs PDI to PDD\tTrue\nBEGIN DOSE TABLE\nAction\tNormalize\n\tX (cm)\tY (cm)\tZ (cm)\tRelative Dose (%)\n\t0\t0\t0\t81.5\n\t0\t0\t1.3\t100\nEND DOSE TABLE\nScan Id\t20641\nScan Date\t03/24/2026 10:22\nScan Type\tDepth Scan\nSource to Surface Distance (cm)\t100\nField Size X (cm)\t40\nField Size Y (cm)\t40\nOffset Axis\t\u0000\nEND SCAN\n"
+    let curve=(assertOk(CurveImport.preview [file "pdd.snctxt" text])).Curves.Head
+    Assert.Equal("PDD",curve.Metadata.Role)
+    Assert.Equal("cm",curve.Metadata.PositionUnit)
+    Assert.Equal("%",curve.Metadata.ValueUnit)
+    Assert.Equal("1000",curve.Metadata.SsdMm)
+    Assert.Equal("400",curve.Metadata.FieldXmm)
+    Assert.Equal("2026-03-24T10:22:00",curve.Metadata.AcquisitionDate)
+    Assert.Equal(1.3,curve.Points[1].Position)
+    Assert.Equal(100.,curve.Points[1].Dose)
+    Assert.False(curve.HasUncertainty)
+    Assert.True(Result.isError(CurveImport.preview [file "ionization.snctxt" (text.Replace("Is PDI to PDD\tTrue","Is PDI to PDD\tFalse"))]))
+    Assert.True(Result.isError(CurveImport.preview [file "truncated.snctxt" (text.Replace("END SCAN", ""))]))
+
+/// Checks MCC metadata wins over misleading filenames without inventing dose units.
+[<Fact>]
+let ``MCC CC export reads scan geometry and leaves quantity unconfirmed`` () =
+    let text="BEGIN_SCAN_DATA\nFORMAT=CC-Export V1.9\nBEGIN_SCAN 1\nSCAN_CURVETYPE=CROSSPLANE_PROFILE\nSSD=1000\nSCAN_DEPTH=0\nFIELD_CROSSPLANE=200\nFIELD_INPLANE=200\nMEAS_DATE=30-Oct-2026 13:50:12\nBEGIN_DATA\n-1 0.9\n1 1\nEND_DATA\nEND_SCAN 1\nEND_SCAN_DATA\n"
+    let curve=(assertOk(CurveImport.preview [file "10x10.mcc" text])).Curves.Head
+    Assert.Equal("X profile",curve.Metadata.Role)
+    Assert.Equal("mm",curve.Metadata.PositionUnit)
+    Assert.Equal("200",curve.Metadata.FieldXmm)
+    Assert.Equal("0",curve.Metadata.DepthMm)
+    Assert.Equal("",curve.Metadata.ValueUnit)
+    Assert.Equal("2026-10-30T13:50:12",curve.Metadata.AcquisitionDate)
