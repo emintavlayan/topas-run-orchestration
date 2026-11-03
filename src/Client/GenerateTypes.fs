@@ -11,6 +11,7 @@ type Page =
     | Import
     | Analyse
     | RunControl
+    | Geometry
 
 /// Represents the visual theme selected for the client shell.
 type ThemeName =

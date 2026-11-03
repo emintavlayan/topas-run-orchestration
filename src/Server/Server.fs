@@ -148,6 +148,9 @@ let private collectBatchHandler (request: CollectRequest) : Async<Result<Collect
 
 /// Exposes the temporary TSEBT API skeleton.
 let topasApi (_: HttpContext) : ITopasApi = {
+    listSceneInputs = fun () -> async { return loadSettings () |> Result.bind SceneOperation.listInputs }
+    loadScene = fun id -> async { return loadSettings () |> Result.bind (fun settings -> SceneOperation.load settings id) }
+    loadSceneAsset = fun request -> async { return loadSettings () |> Result.bind (fun settings -> SceneOperation.loadAsset settings request) }
     getRunControlOverview = fun () -> async {
         match loadSettings () with
         | Error error -> return Error error

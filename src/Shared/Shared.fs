@@ -425,6 +425,9 @@ type RunControlOverview = {
 }
 
 type ITopasApi = {
+    listSceneInputs: unit -> Async<Result<SceneInput list,string>>
+    loadScene: string -> Async<Result<SimulationScene,string>>
+    loadSceneAsset: SceneAssetRequest -> Async<Result<SceneAsset,string>>
     getSavedDatasets: unit -> Async<Result<SavedDatasetSummary list, string>>
     getSavedDataset: string -> Async<Result<SavedDataset, string>>
     previewImport: ImportFile list -> Async<Result<ImportPreview, string>>
