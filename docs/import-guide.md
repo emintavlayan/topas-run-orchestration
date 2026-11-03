@@ -7,9 +7,9 @@ Collect, Import and Analyse use a common saved dataset containing named 1D curve
 ## Import files
 
 1. Open **Import** and choose one or several files from your computer.
-2. Review detected curves. Uncheck scans you do not want to import. Expand each scan to edit its name, X/Y/PDD role, units, depth, SSD, field size and scan date. **Preview raw samples** displays the unnormalized original coordinates and values.
-3. Enter a dataset name and source. Missing dates and optional geometry stay explicitly unknown. Units and role are required. Confirm that values represent dose and that the reviewed metadata is correct.
-4. Choose **Import selected scans**. Open **Analyse** and select the complete run or measurement dataset.
+2. Review detected curves. Uncheck scans you do not want to import. Expand each scan to edit its name, X/Y/PDD role, units, depth, SSD, field size and scan date. Each expanded curve shows compact metadata inputs beside its own raw-sample plot. The layout stacks on narrow screens. Choose **Accept curve** after reviewing it; changing its metadata clears only that curve’s acceptance.
+3. Enter a dataset name and source. Missing dates and optional geometry stay explicitly unknown. Units and role are required. Accept each included curve to confirm its dose quantity and reviewed metadata. The accepted count shows review progress.
+4. Once all included curves are accepted, choose **Import selected scans**. Open **Analyse** and select the complete run or measurement dataset.
 
 Normalization belongs to Analyse. Import does not smooth curves, average scans, normalize dose, convert ionization to dose or guess missing units. Coordinate transforms use mm; original values remain unchanged. Raw cGy is converted to Gy during analysis. Relative and absolute raw units cannot share a plot without normalization.
 

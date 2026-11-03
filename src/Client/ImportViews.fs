@@ -40,13 +40,14 @@ let View () =
     let name,setName = React.useState("")
     let source,setSource = React.useState("Measurement")
     let acquired,setAcquired = React.useState("")
-    let confirmed,setConfirmed = React.useState(false)
-    let active,setActive = React.useState("")
+    let accepted,setAccepted = React.useStateWithUpdater<Set<string>>(Set.empty)
+    let expanded,setExpanded = React.useStateWithUpdater<Set<string>>(Set.empty)
     let error,setError = React.useState("")
     let notice,setNotice = React.useState("")
     let busy,setBusy = React.useState(false)
     let deleting,setDeleting = React.useState("")
     let original,setOriginal = React.useState<ImportFile option>(None)
+    let confirmed = not included.IsEmpty && (included |> List.forall (fun id -> Set.contains id accepted))
     /// Executes a UI operation while retaining review state on failure.
     let run operation =
         setBusy true
@@ -71,8 +72,8 @@ let View () =
         setCurves (fun _ -> [])
         setIncluded (fun _ -> [])
         setOriginal None
-        setConfirmed false
-        setActive ""
+        setAccepted (fun _ -> Set.empty)
+        setExpanded (fun _ -> Set.empty)
     /// Loads several local files and asks the server to detect individual scans.
     let chooseFiles (files: Browser.Types.FileList) = run (async {
         let! rawFiles = readFiles files |> Async.AwaitPromise
@@ -88,7 +89,7 @@ let View () =
             setName (uploaded |> Array.tryHead |> Option.map (fun file -> file.Name) |> Option.defaultValue "")
             setSource "Measurement"
             setAcquired ""
-            setActive value.Curves.Head.Id
+            setExpanded (fun _ -> Set.singleton value.Curves.Head.Id)
     })
     /// Loads a saved version for metadata editing while retaining its original samples.
     let edit id = run (async {
@@ -98,16 +99,17 @@ let View () =
         | Ok value ->
             clearReview()
             setEditing (Some value.Summary)
+            setAccepted (fun _ -> value.Curves |> List.map _.Id |> Set.ofList)
             setName value.Summary.Name
             setSource value.Summary.Source
             setAcquired value.Summary.AcquisitionDate
             setCurves (fun _ -> value.Curves)
             setIncluded (fun _ -> value.Curves |> List.map _.Id)
-            setActive value.Curves.Head.Id
+            setExpanded (fun _ -> Set.singleton value.Curves.Head.Id)
     })
     /// Updates one reviewed curve without changing parser-owned samples or provenance.
     let changeCurve id change =
-        setConfirmed false
+        setAccepted (Set.remove id)
         setCurves (fun items -> items |> List.map (fun c -> if c.Id=id then {c with Metadata=change c.Metadata} else c))
     /// Saves a new reviewed version or a revision-checked metadata edit.
     let save () = run (async {
@@ -178,56 +180,68 @@ let View () =
             Html.section [prop.className "rounded-box border border-base-300 bg-base-100 p-4 space-y-4";prop.children [
                 Html.h3 [prop.className "font-semibold";prop.text (if editing.IsSome then "Edit dataset metadata" else "Review detected curves")]
                 Html.div [prop.className "grid gap-3 md:grid-cols-3";prop.children [
-                    field "Dataset name" name (fun value -> setName value;setConfirmed false)
-                    choice "Source" source ["Measurement","Measurement";"Simulation","Simulation"] (fun value -> setSource value;setConfirmed false)
-                    field "Acquisition date (ISO; blank = unknown)" acquired (fun value -> setAcquired value;setConfirmed false)]]
+                    field "Dataset name" name setName
+                    choice "Source" source ["Measurement","Measurement";"Simulation","Simulation"] setSource
+                    field "Acquisition date (ISO; blank = unknown)" acquired setAcquired]]
                 for curve in curves do
                     let m=curve.Metadata
                     let picked=List.contains curve.Id included
-                    Html.details [prop.className "border border-base-300 rounded-lg p-3";prop.children [
-                        Html.summary [prop.className "flex items-center gap-3 cursor-pointer";prop.children [
+                    let isAccepted=Set.contains curve.Id accepted
+                    let isExpanded=Set.contains curve.Id expanded
+                    let validation=Datasets.validateMetadata (editing.IsSome && m.PositionUnit="index") m
+                    Html.details [prop.className "import-curve border border-base-300 rounded-lg p-3";prop.custom ("open",isExpanded);prop.children [
+                        Html.summary [prop.className "flex items-center gap-3 cursor-pointer";prop.onClick (fun event ->
+                            event.preventDefault()
+                            setExpanded (fun ids -> if isExpanded then Set.remove curve.Id ids else Set.add curve.Id ids));prop.children [
                             if editing.IsNone then
                                 Html.input [prop.type' "checkbox";prop.isChecked picked;prop.disabled busy;prop.className "checkbox checkbox-xs"
                                             prop.onClick (fun event -> event.stopPropagation())
-                                            prop.onChange (fun (value: bool) -> setConfirmed false;setIncluded (fun ids -> if value then curve.Id::ids else ids |> List.filter ((<>) curve.Id)))]
+                                            prop.onChange (fun (value: bool) -> setIncluded (fun ids -> if value then curve.Id::ids else ids |> List.filter ((<>) curve.Id)))]
                             Html.span $"{m.Name} · {curve.Points.Length} samples"
-                            Html.span [prop.className "text-xs text-base-content/60";prop.text (if m.Role="" || m.PositionUnit="" || m.ValueUnit="" then "Metadata required" else m.Role)]]]
-                        Html.div [prop.className "grid gap-3 md:grid-cols-3 pt-3";prop.children [
-                            field "Curve name" m.Name (fun value -> changeCurve curve.Id (fun metadata -> {metadata with Name=value}))
-                            choice "Role" m.Role ["","Unknown — choose";"X profile","X profile";"Y profile","Y profile";"PDD","PDD"] (fun value -> changeCurve curve.Id (fun metadata -> {metadata with Role=value}))
-                            choice "Original coordinate unit" m.PositionUnit
-                                ((if m.PositionUnit="index" then ["index","TOPAS bin index"] else ["","Unknown — choose";"mm","mm";"cm","cm";"m","m"]))
-                                (fun value -> changeCurve curve.Id (fun metadata -> {metadata with PositionUnit=value}))
-                            choice "Original dose unit" m.ValueUnit ["","Unknown — choose";"Gy","Gy";"cGy","cGy";"%","%";"relative","Relative dose"] (fun value -> changeCurve curve.Id (fun metadata -> {metadata with ValueUnit=value}))
-                            field "Depth [mm] (blank = unknown)" m.DepthMm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with DepthMm=value}))
-                            field "SSD [mm] (blank = unknown)" m.SsdMm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with SsdMm=value}))
-                            field "Field X [mm] (blank = unknown)" m.FieldXmm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with FieldXmm=value}))
-                            field "Field Y [mm] (blank = unknown)" m.FieldYmm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with FieldYmm=value}))
-                            field "Scan acquisition date (ISO; blank = unknown)" m.AcquisitionDate (fun value -> changeCurve curve.Id (fun metadata -> {metadata with AcquisitionDate=value}))]]
-                        Html.p [prop.className "text-xs text-warning";prop.text curve.MappingSource]
-                        Html.p [prop.className "text-xs py-2 text-base-content/60";prop.text (curve.Provenance.OriginalFile+" · scan "+curve.Provenance.ScanId+" · parser "+curve.Provenance.ParserVersion+" · uncertainty: "+(if curve.HasUncertainty then "supplied" else "not supplied"))]
-                        Html.div [prop.className "flex gap-2";prop.children [
-                            button "Preview raw samples" busy (fun () -> setActive curve.Id)
-                            match editing with
-                            | Some dataset -> button "Retrieve original" busy (fun () -> downloadOriginal dataset.Id curve.Provenance.FileIndex)
-                            | None -> Html.none]]
-                        if not curve.Provenance.Corrections.IsEmpty then
-                            Html.ul [prop.className "text-xs list-disc pl-5 pt-2";prop.children [for correction in curve.Provenance.Corrections -> Html.li correction]]]]
-                match curves |> List.tryFind (fun c -> c.Id=active) with
-                | Some curve ->
-                    Html.div [prop.className "import-preview";prop.children [
-                        AnalysisPlot.view "Import preview" curve.Id ("Original position ["+(if curve.Metadata.PositionUnit="" then "unknown" else curve.Metadata.PositionUnit)+"]")
-                            ("Original dose ["+(if curve.Metadata.ValueUnit="" then "unknown" else curve.Metadata.ValueUnit)+"]") false true
-                            [{Id=curve.Id;Label=curve.Metadata.Name;Role=curve.Metadata.Role;HasUncertainty=curve.HasUncertainty;Color=AnalysisPlot.color curve.Id;Points=curve.Points}]]]
-                | None -> Html.none
+                            Html.span [prop.className "text-xs text-base-content/60";prop.text (if isAccepted then "Accepted" elif Result.isError validation then "Metadata required" else m.Role)]]]
+                        if isExpanded then
+                            Html.div [prop.className "import-curve-split";prop.children [
+                                Html.div [prop.className "import-curve-editor";prop.children [
+                                    Html.div [prop.className "import-curve-fields";prop.children [
+                                        field "Curve name" m.Name (fun value -> changeCurve curve.Id (fun metadata -> {metadata with Name=value}))
+                                        choice "Role" m.Role ["","Unknown — choose";"X profile","X profile";"Y profile","Y profile";"PDD","PDD"] (fun value -> changeCurve curve.Id (fun metadata -> {metadata with Role=value}))
+                                        choice "Original coordinate unit" m.PositionUnit
+                                            ((if m.PositionUnit="index" then ["index","TOPAS bin index"] else ["","Unknown — choose";"mm","mm";"cm","cm";"m","m"]))
+                                            (fun value -> changeCurve curve.Id (fun metadata -> {metadata with PositionUnit=value}))
+                                        choice "Original dose unit" m.ValueUnit ["","Unknown — choose";"Gy","Gy";"cGy","cGy";"%","%";"relative","Relative dose"] (fun value -> changeCurve curve.Id (fun metadata -> {metadata with ValueUnit=value}))
+                                        field "Depth [mm] (blank = unknown)" m.DepthMm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with DepthMm=value}))
+                                        field "SSD [mm] (blank = unknown)" m.SsdMm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with SsdMm=value}))
+                                        field "Field X [mm] (blank = unknown)" m.FieldXmm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with FieldXmm=value}))
+                                        field "Field Y [mm] (blank = unknown)" m.FieldYmm (fun value -> changeCurve curve.Id (fun metadata -> {metadata with FieldYmm=value}))
+                                        field "Scan acquisition date (ISO; blank = unknown)" m.AcquisitionDate (fun value -> changeCurve curve.Id (fun metadata -> {metadata with AcquisitionDate=value}))]]
+                                    Html.p [prop.className "text-xs text-warning break-words";prop.text curve.MappingSource]
+                                    Html.p [prop.className "text-xs text-base-content/60 break-words";prop.text (curve.Provenance.OriginalFile+" · scan "+curve.Provenance.ScanId+" · parser "+curve.Provenance.ParserVersion)]
+                                    match validation with
+                                    | Error message -> Html.p [prop.className "text-sm text-warning";prop.text message]
+                                    | Ok () -> Html.none
+                                    Html.p [prop.className "text-xs text-base-content/60";prop.text "Accept confirms the role, units and dose quantity. Blank geometry/date fields remain unknown."]
+                                    Html.div [prop.className "flex flex-wrap gap-2";prop.children [
+                                        button (if isAccepted then "Accepted" else "Accept curve") (busy || not picked || isAccepted || Result.isError validation) (fun () ->
+                                            setAccepted (Set.add curve.Id)
+                                            setExpanded (Set.remove curve.Id))
+                                        match editing with
+                                        | Some dataset -> button "Retrieve original" busy (fun () -> downloadOriginal dataset.Id curve.Provenance.FileIndex)
+                                        | None -> Html.none]]
+                                    if not curve.Provenance.Corrections.IsEmpty then
+                                        Html.details [prop.children [
+                                            Html.summary [prop.className "text-xs cursor-pointer";prop.text "Recorded corrections"]
+                                            Html.ul [prop.className "text-xs list-disc pl-5 pt-2";prop.children [for correction in curve.Provenance.Corrections -> Html.li correction]]]]]]
+                                Html.div [prop.className "import-preview";prop.children [
+                                    AnalysisPlot.view "Import preview" curve.Id ("Original position ["+(if m.PositionUnit="" then "unknown" else m.PositionUnit)+"]")
+                                        ("Original dose ["+(if m.ValueUnit="" then "unknown" else m.ValueUnit)+"]") false true
+                                        [{Id=curve.Id;Label=m.Name;Role=m.Role;HasUncertainty=curve.HasUncertainty;Color=AnalysisPlot.color curve.Id;Points=curve.Points}]]]]]]]
                 match original with
                 | Some file -> Html.a [prop.className "btn btn-outline btn-sm";prop.download (file.Name.Replace('\\','/').Split('/') |> Array.last);
                                       prop.href ("data:application/octet-stream;base64,"+file.ContentBase64);prop.text ("Download "+file.Name)]
                 | None -> Html.none
                 if not issues.IsEmpty then Html.ul [prop.className "text-sm text-warning";prop.children [for issue in issues -> Html.li issue]]
-                Html.label [prop.className "flex gap-2 items-center text-sm";prop.children [
-                    Html.input [prop.type' "checkbox";prop.className "checkbox checkbox-sm";prop.isChecked confirmed;prop.onChange setConfirmed]
-                    Html.span "I confirm the scan roles, units and dose quantity. Blank geometry/date fields remain unknown."]]
+                Html.p [prop.className "text-sm text-base-content/60";prop.custom ("role","status")
+                        prop.text (string (reviewed |> List.filter (fun curve -> Set.contains curve.Id accepted) |> List.length)+" / "+string reviewed.Length+" included curves accepted")]
                 Html.div [prop.className "flex gap-2";prop.children [
                     button (if editing.IsSome then "Save metadata" else "Import selected scans") (busy || not confirmed || not headerValid || reviewed.IsEmpty || not issues.IsEmpty) save
                     button "Cancel review" busy clearReview]]]]

@@ -76,6 +76,15 @@ body {
 .analysis-plot { min-width: 0; padding: 0 0.5rem 0.5rem; }
 .analysis-plot-canvas { width: 100%; height: clamp(320px, 58vh, 640px); }
 /* Import previews size their own canvas and reserve their full height in document flow. */
+/* Each curve keeps its compact editor and chart together. */
+.import-curve-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; padding-top: 1rem; }
+.import-curve-editor { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.import-curve-fields { width: 100%; max-width: 34rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.import-curve-fields > :first-child { grid-column: 1 / -1; }
+.import-curve-fields input, .import-curve-fields select { min-width: 0; }
+.import-curve > summary { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .import-curve-split { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .import-curve-fields { grid-template-columns: minmax(0, 1fr); } }
 .import-preview { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; isolation: isolate; }
 .import-preview .analysis-plot { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .import-preview .analysis-plot-canvas { width: 100%; max-width: 100%; min-width: 0; height: clamp(240px, 40vh, 360px); }
