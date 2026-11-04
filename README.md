@@ -71,3 +71,7 @@ Keep generated inputs and raw outputs for reproducibility. Collect can run again
 - 3D slicing and gamma remain future work.
 
 [Browse all documentation and technical references →](docs/index.md)
+
+### Geometry inspection
+
+The **Geometry** tab previews generated run inputs in 3D, including geometry ownership, STL components, source frames and scorer volumes. See the [geometry viewer guide](docs/geometry-viewer.md).

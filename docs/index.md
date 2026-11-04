@@ -38,3 +38,5 @@ These specifications describe implementation details; the task guides above expl
 ## Source of truth
 
 The repository contains the application and its deployment helpers. TOPAS templates and CAD assets are configured external inputs, maintained separately. Changing a current template does not rewrite previously generated inputs. A guide's example batch ID or server path is not a required naming convention for a new installation.
+
+- [Generated-input geometry viewer](geometry-viewer.md)

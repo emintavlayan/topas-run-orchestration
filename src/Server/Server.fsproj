@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -31,6 +31,8 @@
     <Compile Include="CollectOperation.fs" />
     <Compile Include="SqliteInit.fs" />
     <Compile Include="RunControlOperation.fs" />
+    <Compile Include="TopasScene.fs" />
+    <Compile Include="SceneOperation.fs" />
     <Compile Include="Server.fs" />
     <Content Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -41,4 +43,5 @@
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
+
 
