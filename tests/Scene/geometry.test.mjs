@@ -36,3 +36,20 @@ test('binary STL uses physical scaling',()=>{
 test('Fable typed numeric arrays are accepted by JSCAD primitives',()=>{
  const solid=localSolid({...component('Box'),dimensions:new Float64Array([1,2,3])},{});assert.ok(vertices(solid).length>0);
 });
+test('BeamHead display convention puts a negative-Z source above the phantom',async()=>{
+ const {displayPoint}=await import('../../src/Client/SceneGeometry.mjs');
+ const source=[0,0,-1000],phantom=[0,0,150];
+ assert.ok(displayPoint(source)[2]>displayPoint(phantom)[2]);
+ near(displayPoint(source),[0,0,1000]);near(displayPoint(phantom),[0,0,-150]);
+ near(source,[0,0,-1000]);near(phantom,[0,0,150]);
+});
+test('display meshes and source/scorer guide points share the same final reflection',async()=>{
+ const {displayPoint,displaySolid}=await import('../../src/Client/SceneGeometry.mjs');
+ const components=[component('World'),component('Gantry','World',[0,0,-1000],[0,15,0]),component('Scorer','Gantry',[0,0,100])];
+ const physical=buildSolids(components,[],{},[],'').solids[1];
+ const expected=vertices(physical).map(displayPoint),actual=vertices(displaySolid(physical));
+ for(const point of expected)assert.ok(actual.some(p=>p.every((v,i)=>Math.abs(v-point[i])<1e-8)));
+ const frame=worldMatrix('Gantry',components),start=displayPoint(transformPoint(frame,[0,0,0])),end=displayPoint(transformPoint(frame,[0,0,100]));
+ assert.ok(end[2]<start[2]);assert.ok(end[0]>start[0]);
+ near(transformPoint(worldMatrix('Scorer',components),[0,0,0]),transformPoint(frame,[0,0,100]));
+});

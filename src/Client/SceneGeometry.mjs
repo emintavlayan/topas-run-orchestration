@@ -2,6 +2,11 @@ import modeling from '@jscad/modeling';
 import stl from '@jscad/stl-deserializer';
 const {primitives, transforms, booleans, colors, geometries} = modeling;
 
+/// Maps a physical TOPAS point into BeamHead's display convention with positive Z downward.
+export function displayPoint(point) { return [point[0],point[1],-point[2]]; }
+/// Mirrors a completed world solid only for display, preserving JSCAD polygon winding.
+export function displaySolid(solid) { return transforms.mirrorZ(solid); }
+
 /// Multiplies column-major matrices without changing either operand.
 export function multiply(a,b) {
     return Array.from({length:16},(_,i)=>Array.from({length:4},(_,k)=>a[k*4+i%4]*b[Math.floor(i/4)*4+k]).reduce((s,x)=>s+x,0));

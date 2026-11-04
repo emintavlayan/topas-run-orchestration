@@ -1,10 +1,10 @@
 import React,{useEffect,useRef,useState} from 'react';
 import renderer from '@jscad/regl-renderer';
-import {buildSolids,bounds,worldMatrix,transformPoint,included,scorerSegments} from './SceneGeometry.mjs';
+import {buildSolids,bounds,worldMatrix,transformPoint,included,scorerSegments,displayPoint,displaySolid} from './SceneGeometry.mjs';
 const {cameras,controls,drawCommands,entitiesFromSolids,prepareRender}=renderer;
 
-/// Builds a line entity using physical world coordinates.
-function lines(segments,color){const positions=segments.flat();return {geometry:{positions,normals:positions.map(()=>[0,0,1]),indices:positions.map((_,i)=>i),color},visuals:{drawCmd:'drawLines',show:true,transparent:color[3]<1}};}
+/// Builds a line entity by mapping physical world coordinates into the shared display frame.
+function lines(segments,color){const positions=segments.flat().map(displayPoint);return {geometry:{positions,normals:positions.map(()=>[0,0,1]),indices:positions.map((_,i)=>i),color},visuals:{drawCmd:'drawLines',show:true,transparent:color[3]<1}};}
 /// Adds local component axes and source direction guides without inventing field apertures.
 function guides(components,sources,hidden,selected,span,showAxes){
     const entities=[],length=Math.max(5,span*.08);
@@ -25,17 +25,17 @@ export default function SceneCanvas({components,scorers,sources,assets,hidden,se
         const container=host.current;let dispose=()=>{};
         try{
             const built=buildSolids(components,scorers,assets,hidden,selected);setError(built.warnings.join('\n'));
-            const extent=bounds(built.solids,components,hidden),perspective=cameras.perspective,orbit=controls.orbit;
+            const physicalExtent=bounds(built.solids,components,hidden),extent={...physicalExtent,center:displayPoint(physicalExtent.center)},perspective=cameras.perspective,orbit=controls.orbit;
             const camera={...perspective.defaults,near:Math.max(.01,extent.span/10000),far:Math.max(18000,extent.span*20),position:extent.center.map((v,i)=>v+[1.4,-1.8,1.2][i]*extent.span),target:[...extent.center]};
             if(saved.current&&lastReset.current===reset)Object.assign(camera,saved.current);
             else if(view!=='orbit'){
-                const direction={front:[0,0,-2],side:[2,0,0],top:[0,2,0]}[view];camera.position=extent.center.map((v,i)=>v+direction[i]*extent.span);if(view==='front')camera.up=[0,1,0];
+                const direction={front:[0,0,-2],side:[2,0,0],top:[0,2,0]}[view];camera.position=extent.center.map((v,i)=>v+displayPoint(direction)[i]*extent.span);if(view==='front')camera.up=[0,1,0];
             }
             lastReset.current=reset;
             let control={...orbit.defaults},frame,dirty=true,drag=null;
             const canvas=document.createElement('canvas');canvas.style.cssText='width:100%;height:100%;display:block;touch-action:none';container.appendChild(canvas);
             const render=prepareRender({glOptions:{canvas}});
-            const options={camera,drawCommands:{drawMesh:drawCommands.drawMesh,drawLines:drawCommands.drawLines,drawAxis:drawCommands.drawAxis},entities:[...entitiesFromSolids({smoothNormals:false},...built.solids),...guides(components,showSources?sources:[],hidden,selected,extent.span,showAxes),...components.filter(c=>included(c.name,components,hidden)).map(c=>lines(scorerSegments(c,scorers).map(segment=>segment.map(p=>transformPoint(worldMatrix(c.name,components),p))),[.7,.08,.2,1])).filter(e=>e.geometry.positions.length)],rendering:{background:[.95,.97,.98,1]}};
+            const options={camera,drawCommands:{drawMesh:drawCommands.drawMesh,drawLines:drawCommands.drawLines,drawAxis:drawCommands.drawAxis},entities:[...entitiesFromSolids({smoothNormals:false},...built.solids.map(displaySolid)),...guides(components,showSources?sources:[],hidden,selected,extent.span,showAxes),...components.filter(c=>included(c.name,components,hidden)).map(c=>lines(scorerSegments(c,scorers).map(segment=>segment.map(p=>transformPoint(worldMatrix(c.name,components),p))),[.7,.08,.2,1])).filter(e=>e.geometry.positions.length)],rendering:{background:[.95,.97,.98,1]}};
             /// Resizes the drawing buffer to match the available panel.
             function resize(){const width=Math.max(1,container.clientWidth),height=Math.max(1,container.clientHeight);canvas.width=Math.round(width*Math.min(2,window.devicePixelRatio||1));canvas.height=Math.round(height*Math.min(2,window.devicePixelRatio||1));perspective.setProjection(camera,camera,{width,height});perspective.update(camera,camera);dirty=true;}
             /// Applies pointer movement through the renderer's orbit controller.
@@ -50,7 +50,7 @@ export default function SceneCanvas({components,scorers,sources,assets,hidden,se
             function tick(){if(dirty){const updated=orbit.update({controls:control,camera});control={...control,...updated.controls};if(updated.camera)Object.assign(camera,updated.camera);perspective.update(camera,camera);render(options);dirty=!!control.changed;}frame=requestAnimationFrame(tick);}
             canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);canvas.addEventListener('wheel',wheel,{passive:false});
             const observer=new ResizeObserver(resize);observer.observe(container);resize();tick();
-            dispose=()=>{saved.current={position:[...camera.position],target:[...camera.target]};cancelAnimationFrame(frame);observer.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);canvas.removeEventListener('wheel',wheel);canvas.getContext('webgl')?.getExtension('WEBGL_lose_context')?.loseContext();canvas.remove();};
+            dispose=()=>{saved.current={position:[...camera.position],target:[...camera.target],up:[...camera.up]};cancelAnimationFrame(frame);observer.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);canvas.removeEventListener('wheel',wheel);canvas.getContext('webgl')?.getExtension('WEBGL_lose_context')?.loseContext();canvas.remove();};
         }catch(error){container.replaceChildren();setError(`3D view unavailable: ${error.message}`);}
         return dispose;
     },[components,scorers,sources,assets,hidden,selected,reset,view,showAxes,showSources]);

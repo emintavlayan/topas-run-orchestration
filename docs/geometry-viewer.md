@@ -16,7 +16,7 @@ Open **Geometry**, select a generated input under its batch, and inspect the geo
 
 ## Supported generated inputs
 
-The viewer reads `inputs/<batch>/*.txt` under the configured application root. It supports `Group`, `TsBox`, full/sector/hollow `TsCylinder`, and `TsCAD` STL components. Lengths are normalized to millimetres and rotations to degrees. Parent transforms are composed using intrinsic XYZ rotations without a display mirror.
+The viewer reads `inputs/<batch>/*.txt` under the configured application root. It supports `Group`, `TsBox`, full/sector/hollow `TsCylinder`, and `TsCAD` STL components. Lengths are normalized to millimetres and rotations to degrees. Parent transforms are composed using intrinsic XYZ rotations in physical coordinates. A final display-only Z reflection matches BeamHead: TOPAS +Z points downward. Meshes, source/scorer guides and axes share this reflection; input values and geometry relationships remain in their original coordinates.
 
 Numeric literals and direct parameter references are supported, including cycle detection. A repeated assignment uses its last value, matching the generator's stitched-file convention. Scorers retain their volume/surface attachment, quantity, active state and bin counts; component bins are used when a scorer does not override them.
 
