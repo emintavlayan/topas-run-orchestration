@@ -7,7 +7,7 @@ open Fable.Core.JsInterop
 open Shared
 open SAFE
 
-/// Imports the component that owns the JSCAD renderer lifecycle.
+/// Imports the component that owns the Three.js inspector lifecycle.
 [<Import("default", "./SceneCanvas.jsx")>]
 let private sceneCanvas: obj = jsNative
 
@@ -107,6 +107,9 @@ let View () =
     let view, setView = React.useState ("orbit")
     let axes, setAxes = React.useState (true)
     let sources, setSources = React.useState (true)
+    let focused, setFocused = React.useState ("")
+    let isolated, setIsolated = React.useState ("")
+    let mode, setMode = React.useState ("transparent")
     let revision, setRevision = React.useState (0)
     let generation = React.useRef (0)
 
@@ -156,6 +159,8 @@ let View () =
                             | Ok value ->
                                 setScene (Some value)
                                 setSelected ""
+                                setFocused ""
+                                setIsolated ""
                                 setHidden Set.empty
                                 setReset (fun current -> current + 1)
 
@@ -223,6 +228,7 @@ let View () =
 
     /// Selects a standard camera orientation and refits the scene.
     let changeView name =
+        setFocused ""
         setView name
         setReset (fun current -> current + 1)
 
@@ -257,12 +263,37 @@ let View () =
                     button "Refresh" (fun () -> setRevision (revision + 1))
                     for label, name in
                         [
-                            "Fit", "orbit"
+                            "Fit all", "orbit"
                             "Front (−Z)", "front"
                             "Side (+X)", "side"
                             "Top (+Y)", "top"
                         ] do
                         button label (fun () -> changeView name)
+                    Html.button [
+                        prop.className "analysis-button"
+                        prop.text "Focus selected"
+                        prop.disabled (String.IsNullOrEmpty selected)
+                        prop.onClick (fun _ ->
+                            setFocused selected
+                            setView "preserve"
+                            setReset (fun current -> current + 1))
+                    ]
+                    Html.label [
+                        prop.children [
+                            Html.span "Display "
+                            Html.select [
+                                prop.className "select select-bordered select-sm"
+                                prop.custom ("aria-label", "Geometry display mode")
+                                prop.value mode
+                                prop.onChange setMode
+                                prop.children [
+                                    for name, label in
+                                        [ "transparent", "Transparent"; "solid", "Solid"; "wireframe", "Wireframe" ] do
+                                        Html.option [ prop.value name; prop.text label ]
+                                ]
+                            ]
+                        ]
+                    ]
                     Html.label [
                         Html.input [ prop.type'.checkbox; prop.isChecked axes; prop.onChange setAxes ]
                         Html.span " Local axes"
@@ -291,7 +322,38 @@ let View () =
                         Html.aside [
                             prop.className "scene-tree"
                             prop.children [
-                                Html.h3 "Components"
+                                Html.div [
+                                    prop.className "scene-tree-heading"
+                                    prop.children [
+                                        Html.h3 "Components"
+                                        Html.span (sprintf "%d" value.Components.Length)
+                                    ]
+                                ]
+                                Html.div [
+                                    prop.className "scene-visibility-actions"
+                                    prop.children [
+                                        button "Show all" (fun () ->
+                                            setHidden Set.empty
+                                            setIsolated "")
+                                        Html.button [
+                                            prop.className "analysis-button"
+                                            prop.text (
+                                                if isolated <> "" then
+                                                    "Clear isolation"
+                                                else
+                                                    "Isolate selected"
+                                            )
+                                            prop.disabled (String.IsNullOrEmpty selected && String.IsNullOrEmpty isolated)
+                                            prop.onClick (fun _ ->
+                                                setIsolated (if isolated <> "" then "" else selected))
+                                        ]
+                                    ]
+                                ]
+                                if isolated <> "" then
+                                    Html.p [
+                                        prop.className "scene-visibility-status"
+                                        prop.text ("Isolated: " + isolated)
+                                    ]
                                 for c in treeOrder value.Components do
                                     Html.div [
                                         prop.className (
@@ -389,6 +451,10 @@ let View () =
                                              |> createObj)
                                         "hidden" ==> (hidden |> Set.toArray)
                                         "selected" ==> selected
+                                        "onSelect" ==> setSelected
+                                        "focused" ==> focused
+                                        "isolated" ==> isolated
+                                        "mode" ==> mode
                                         "reset" ==> reset
                                         "view" ==> view
                                         "showAxes" ==> axes
@@ -398,7 +464,7 @@ let View () =
                                 Html.p [
                                     prop.className "scene-caption"
                                     prop.text
-                                        "Drag to orbit · Shift+drag to pan · Scroll to zoom · Coordinates in mm. Source squares indicate local frames, not measured phase-space extents."
+                                        "Drag to orbit · Right-drag or Shift+drag to pan · Scroll to zoom · Double-click to focus · Source squares show local frames, not phase-space extents."
                                 ]
                             ]
                         ]

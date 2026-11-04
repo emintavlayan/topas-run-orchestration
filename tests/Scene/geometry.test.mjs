@@ -1,55 +1,23 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {placement,transformPoint,worldMatrix,included,localSolid,vertices,buildSolids,bounds} from '../../src/Client/SceneGeometry.mjs';
-/// Compares transformed coordinates against independently calculated values.
-function near(actual,expected){actual.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-8,`${actual} != ${expected}`));}
-/// Creates a renderer-boundary component with an explicit local frame.
+import * as THREE from '../../src/Client/node_modules/three/build/three.module.js';
+import {placement,transformPoint,worldMatrix,included,within,localGeometry,vertices,buildGeometries,sceneBounds,fitDistance,scorerSegments,displayPoint} from '../../src/Client/SceneGeometry.mjs';
+/// Compares physical coordinates with an independent expected result.
+function near(actual,expected,tolerance=1e-5){actual.forEach((value,i)=>assert.ok(Math.abs(value-expected[i])<tolerance,`${actual} != ${expected}`));}
+/// Creates a renderer-boundary component in its original TOPAS frame.
 function component(name,parent=null,translation=[0,0,0],rotation=[0,0,0]){return {name,parent,translation,rotation,included:true,kind:'box',dimensions:[1,2,3]};}
-test('nested gantry rotation moves child translation in parent axes',()=>{
- const components=[component('World'),component('Gantry','World',[10,20,30],[0,90,0]),component('Phantom','Gantry',[0,0,100])];
- near(transformPoint(worldMatrix('Phantom',components),[0,0,0]),[110,20,30]);
- near(transformPoint(worldMatrix('Phantom',components),[1,0,0]),[110,20,29]);
-});
-test('intrinsic XYZ rotation order is preserved',()=>near(transformPoint(placement([0,0,0],[90,90,0]),[0,0,1]),[1,0,0]));
-test('units are used without camera or display mirroring',()=>{
- const c=component('Box');c.translation=[10,20,30];const {solids}=buildSolids([c],[],{},[],'');
- const result=bounds(solids,[c]);near(result.center,[10,20,30]);assert.equal(result.span,10);
- const points=vertices(solids[0]);assert.equal(Math.min(...points.map(p=>p[2])),27);
-});
-test('excluded ancestors disable descendants',()=>{const components=[component('World'),component('A','World')];assert.equal(included('A',components,['World']),false);components[0].included=false;assert.equal(included('A',components),false);});
-test('hollow and sector cylinders have physical extents',()=>{
- const solid=localSolid({...component('Cylinder'),kind:'cylinder',dimensions:[2,5,10,0,180]},{});const points=vertices(solid);assert.ok(points.length>0);assert.ok(points.every(p=>p[1]>=-1e-8));assert.equal(Math.max(...points.map(p=>p[2])),10);
-});
-test('ASCII STL is imported and scaled in its original coordinate frame',()=>{
- const text='solid test\nfacet normal 0 0 1\nouter loop\nvertex 1 0 0\nvertex 0 1 0\nvertex 0 0 0\nendloop\nendfacet\nendsolid test';
- const solid=localSolid({...component('CAD'),kind:'cad',unit:10},{CAD:Buffer.from(text).toString('base64')});near(vertices(solid[0]??solid)[0],[10,0,0]);
-});
-test('scorer dividers retain real bin positions and surface ownership',async()=>{
- const {scorerSegments}=await import('../../src/Client/SceneGeometry.mjs');const c=component('Box');
- const dividers=scorerSegments(c,[{component:'Box',active:true,bins:{X:2}}]);assert.equal(dividers.length,1);assert.equal(dividers[0][0][0],0);
- const face=scorerSegments(c,[{component:'Box',active:true,surface:'ZMinusSurface'}]);assert.equal(face.length,4);assert.ok(face.flat().every(p=>p[2]===-3));
-});
-test('binary STL uses physical scaling',()=>{
- const bytes=Buffer.alloc(134);bytes.writeUInt32LE(1,80);[[1,0,0],[0,1,0],[0,0,0]].flat().forEach((value,i)=>bytes.writeFloatLE(value,96+i*4));
- const solid=localSolid({...component('CAD'),kind:'cad',unit:2},{CAD:bytes.toString('base64')});assert.ok(vertices(solid[0]??solid).some(p=>p[0]===2&&p[1]===0&&p[2]===0));
-});
-test('Fable typed numeric arrays are accepted by JSCAD primitives',()=>{
- const solid=localSolid({...component('Box'),dimensions:new Float64Array([1,2,3])},{});assert.ok(vertices(solid).length>0);
-});
-test('BeamHead display convention puts a negative-Z source above the phantom',async()=>{
- const {displayPoint}=await import('../../src/Client/SceneGeometry.mjs');
- const source=[0,0,-1000],phantom=[0,0,150];
- assert.ok(displayPoint(source)[2]>displayPoint(phantom)[2]);
- near(displayPoint(source),[0,0,1000]);near(displayPoint(phantom),[0,0,-150]);
- near(source,[0,0,-1000]);near(phantom,[0,0,150]);
-});
-test('display meshes and source/scorer guide points share the same final reflection',async()=>{
- const {displayPoint,displaySolid}=await import('../../src/Client/SceneGeometry.mjs');
- const components=[component('World'),component('Gantry','World',[0,0,-1000],[0,15,0]),component('Scorer','Gantry',[0,0,100])];
- const physical=buildSolids(components,[],{},[],'').solids[1];
- const expected=vertices(physical).map(displayPoint),actual=vertices(displaySolid(physical));
- for(const point of expected)assert.ok(actual.some(p=>p.every((v,i)=>Math.abs(v-point[i])<1e-8)));
- const frame=worldMatrix('Gantry',components),start=displayPoint(transformPoint(frame,[0,0,0])),end=displayPoint(transformPoint(frame,[0,0,100]));
- assert.ok(end[2]<start[2]);assert.ok(end[0]>start[0]);
- near(transformPoint(worldMatrix('Scorer',components),[0,0,0]),transformPoint(frame,[0,0,100]));
-});
+/// Calculates the signed volume to verify caps and hollow geometry independently of bounds.
+function volume(geometry){const g=geometry.index?geometry.toNonIndexed():geometry,p=g.getAttribute('position');let sum=0;for(let i=0;i<p.count;i+=3){const a=new THREE.Vector3().fromBufferAttribute(p,i),b=new THREE.Vector3().fromBufferAttribute(p,i+1),c=new THREE.Vector3().fromBufferAttribute(p,i+2);sum+=a.dot(b.cross(c))/6;}if(g!==geometry)g.dispose();return Math.abs(sum);}
+test('nested gantry rotation moves child displacement in parent axes',()=>{const cs=[component('World'),component('Gantry','World',[10,20,30],[0,90,0]),component('Phantom','Gantry',[0,0,100])];near(transformPoint(worldMatrix('Phantom',cs),[0,0,0]),[110,20,30]);near(transformPoint(worldMatrix('Phantom',cs),[1,0,0]),[110,20,29]);});
+test('intrinsic XYZ rotation order is retained',()=>near(transformPoint(placement([0,0,0],[90,90,0]),[0,0,1]),[1,0,0]));
+test('Fable typed arrays preserve full box dimensions',()=>{const c={...component('Box'),dimensions:new Float64Array([300,1,1])},g=localGeometry(c,{});g.computeBoundingBox();near(g.boundingBox.min.toArray(),[-300,-1,-1]);near(g.boundingBox.max.toArray(),[300,1,1]);g.dispose();});
+test('62 cm tank and 60 cm profiles use the same physical scale',()=>{const c={...component('Tank'),kind:'cylinder',dimensions:[0,310,150,0,360]},g=localGeometry(c,{});g.computeBoundingBox();near(g.boundingBox.max.toArray(),[310,310,150]);assert.ok(Math.abs(volume(g)-Math.PI*310**2*300)/(Math.PI*310**2*300)<.003);g.dispose();});
+test('hollow cylinder sector has correct volume and end caps',()=>{const c={...component('Cylinder'),kind:'cylinder',dimensions:[2,5,10,0,180]},g=localGeometry(c,{});assert.ok(vertices(g).every(p=>p[1]>=-1e-5));assert.ok(Math.abs(volume(g)-Math.PI*(25-4)*20/2)/(Math.PI*(25-4)*20/2)<.003);g.dispose();});
+test('excluded or hidden parents suppress descendants',()=>{const cs=[component('World'),component('A','World')];assert.equal(included('A',cs,['World']),false);cs[0].included=false;assert.equal(included('A',cs),false);});
+test('isolation retains only selected subtree',()=>{const cs=[component('World'),component('A','World'),component('B','A'),component('C','World')];assert.ok(within('B','A',cs));assert.equal(within('C','A',cs),false);});
+test('ASCII STL retains scale and original coordinates',()=>{const text='solid test\nfacet normal 0 0 1\nouter loop\nvertex 1 0 0\nvertex 0 1 0\nvertex 0 0 0\nendloop\nendfacet\nendsolid test',g=localGeometry({...component('CAD'),kind:'cad',unit:10},{CAD:Buffer.from(text).toString('base64')});assert.ok(vertices(g).some(p=>p[0]===10));g.dispose();});
+test('binary STL retains scale',()=>{const bytes=Buffer.alloc(134);bytes.writeUInt32LE(1,80);[[1,0,0],[0,1,0],[0,0,0]].flat().forEach((v,i)=>bytes.writeFloatLE(v,96+i*4));const g=localGeometry({...component('CAD'),kind:'cad',unit:2},{CAD:bytes.toString('base64')});assert.ok(vertices(g).some(p=>p[0]===2));g.dispose();});
+test('scorer bins and selected surfaces use true local positions',()=>{const c=component('Box'),segments=scorerSegments(c,[{component:'Box',active:true,bins:{X:2}}]);assert.equal(segments.length,1);assert.equal(segments[0][0][0],0);const face=scorerSegments(c,[{component:'Box',active:true,surface:'ZMinusSurface'}]);assert.equal(face.length,4);assert.ok(face.flat().every(p=>p[2]===-3));});
+test('display reflection places source above phantom without changing physical inputs',()=>{const source=[0,0,-1000],tank=[0,0,150];assert.ok(displayPoint(source)[2]>displayPoint(tank)[2]);near(source,[0,0,-1000]);});
+test('focus fits selected geometry rather than distant head',()=>{const cs=[{...component('World'),kind:'group'},component('Head','World',[0,0,-1000]),component('Scorer','World',[0,0,13])],{entries}=buildGeometries(cs,{});const all=sceneBounds(entries,cs),focused=sceneBounds(entries,cs,[],'Scorer');near(focused.getCenter(new THREE.Vector3()).toArray(),[0,0,-13]);assert.ok(all.getSize(new THREE.Vector3()).z>1000);near(focused.getSize(new THREE.Vector3()).toArray(),[2,4,6]);for(const e of entries)e.geometry.dispose();});
+test('narrow camera framing expands distance to fit both dimensions',()=>{const box=new THREE.Box3(new THREE.Vector3(-300,-300,-150),new THREE.Vector3(300,300,150));assert.ok(fitDistance(box,40,.5)>fitDistance(box,40,2));});

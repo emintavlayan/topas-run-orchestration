@@ -6,12 +6,12 @@
     },
     "scripts": {},
     "dependencies": {
-        "@jscad/modeling": "2.13.0",
-        "@jscad/regl-renderer": "2.6.15",
-        "@jscad/stl-deserializer": "2.1.30",
+        "@react-three/drei": "9.122.0",
+        "@react-three/fiber": "8.18.0",
         "plotly.js-basic-dist-min": "4.2.0",
         "react": "^18.2.0",
-        "react-dom": "^18.2.0"
+        "react-dom": "^18.2.0",
+        "three": "0.170.0"
     },
     "devDependencies": {
         "@types/node": "^20.9.1",

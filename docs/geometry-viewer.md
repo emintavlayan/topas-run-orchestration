@@ -6,9 +6,10 @@ Open **Geometry**, select a generated input under its batch, and inspect the geo
 
 ## Controls
 
-- Drag to orbit; Shift+drag to pan; scroll to zoom.
-- Fit resets the camera around the available geometry. Front, Side and Top select standard world views.
-- The component tree follows explicit `Parent` relationships. Select a component to see its local placement, material, shape, attached scorers and sources.
+- Drag to orbit; right-drag or Shift+drag to pan; scroll to zoom. The camera stays in place while selecting components or toggling visibility.
+- **Fit all** frames visible geometry. **Focus selected** frames the selected component and its descendants. Double-click a mesh to focus it directly. Front, Side and Top select standard world views; the clickable view cube is labelled with the original TOPAS axes.
+- Choose **Solid**, **Transparent** or **Wireframe** display. **Isolate selected** shows one subtree; **Show all** restores visibility.
+- Click a mesh or select it in the component tree, which follows explicit `Parent` relationships. Select a component to see its local placement, material, shape, attached scorers and sources.
 - Visibility controls hide a component and its descendants. `Include=False` components stay excluded. Components marked `Invisible` in TOPAS graphics are shown for inspection and identified in their details.
 - Local axes use red X, green Y and blue Z. The World frame marks the coordinate origin; it is not assumed to be a clinical isocentre.
 - Source frames use a purple square and local +Z guide. Their drawn size is illustrative; the viewer does not read particle records or infer an aperture from a phase-space file.
@@ -26,7 +27,7 @@ This is a viewer for resolved generated inputs. Unresolved `includeFile` stateme
 
 `InputFile` and `FileFormat` determine the CAD filename. `Units` determines its scale. Relative CAD paths are resolved from `runs/<batch>`, matching the generated Slurm working directory. Absolute paths are accepted only inside the configured application root. The original STL coordinates are retained.
 
-Missing or unsupported CAD assets produce visible messages while the remaining scene remains available. Linked paths and files outside the workspace are rejected. Limits are 8 MiB per generated input and 32 MiB per STL. ASCII and binary STL are read by JSCAD.
+Missing or unsupported CAD assets produce visible messages while the remaining scene remains available. Linked paths and files outside the workspace are rejected. Limits are 8 MiB per generated input and 32 MiB per STL. ASCII and binary STL are read directly by Three.js.
 
 ## Implementation and checks
 
@@ -34,7 +35,8 @@ Missing or unsupported CAD assets produce visible messages while the remaining s
 - `Server/TopasScene.fs`: pure TOPAS-to-scene parser using `Result` and FsToolkit.ErrorHandling.
 - `Server/SceneOperation.fs`: bounded input discovery and CAD access.
 - `Client/SceneViews.fs`: F# UI, request lifetime handling, component inspection and visibility.
-- `Client/SceneGeometry.mjs` and `SceneCanvas.jsx`: JSCAD geometry, matrix composition and WebGL lifecycle.
+- `Client/SceneGeometry.mjs`: Three.js primitives/STL, physical transforms, visibility and camera framing.
+- `Client/SceneCanvas.jsx`: React Three Fiber canvas with Drei orbit controls, view cube, picking and materials.
 
 BeamHead is maintained independently. Additional engines can supply their own scene adapters when needed.
 
