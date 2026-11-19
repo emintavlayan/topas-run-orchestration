@@ -7,6 +7,8 @@
 .ionide/
 .vs/
 deploy/
+deploy-linux/
+publish-windows/
 obj/
 bin/
 output/

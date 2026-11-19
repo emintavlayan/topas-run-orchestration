@@ -122,29 +122,32 @@ let private collectFileIssue
     }
 
 /// Collects file issues for one generated run row.
-let private collectRowFileIssues (row: CollectRunRow) : CollectFileIssue list =
-    let csvPath, logPath = expectedCsvAndLogPaths row
+let private collectRowFileIssues (scorers: CollectScorer list) (row: CollectRunRow) : CollectFileIssue list =
+    let _, logPath = expectedCsvAndLogPaths row
     let csvIssues =
-        if not (File.Exists csvPath) then
-            [ collectFileIssue row "Csv" csvPath "MissingCsv" None ]
-        else
-            let info = FileInfo(csvPath)
-
-            if info.Length <= 0L then
-                [ collectFileIssue row "Csv" csvPath "EmptyCsv" (Some "CSV file is zero bytes.") ]
+        scorers
+        |> List.collect (fun scorer ->
+            let csvPath = row.OutputFilePath + scorer.Suffix + ".csv"
+            if not (File.Exists csvPath) then
+                [ collectFileIssue row "Csv" csvPath "MissingCsv" None ]
             else
-                match hasNumericTopasCsvRows csvPath with
-                | Error message -> [ collectFileIssue row "Csv" csvPath "CsvReadError" (Some message) ]
-                | Ok true -> []
-                | Ok false ->
-                    [
-                        collectFileIssue
-                            row
-                            "Csv"
-                            csvPath
-                            "NoNumericCsvRows"
-                            (Some "CSV exists but contains no numeric TOPAS scorer rows.")
-                    ]
+                let info = FileInfo(csvPath)
+
+                if info.Length <= 0L then
+                    [ collectFileIssue row "Csv" csvPath "EmptyCsv" (Some "CSV file is zero bytes.") ]
+                else
+                    match hasNumericTopasCsvRows csvPath with
+                    | Error message -> [ collectFileIssue row "Csv" csvPath "CsvReadError" (Some message) ]
+                    | Ok true -> []
+                    | Ok false ->
+                        [
+                            collectFileIssue
+                                row
+                                "Csv"
+                                csvPath
+                                "NoNumericCsvRows"
+                                (Some "CSV exists but contains no numeric TOPAS scorer rows.")
+                        ])
 
     let logIssues =
         if not (File.Exists logPath) then
@@ -226,8 +229,10 @@ let buildCollectPreflightResult
     let runFolder = runFolderPath settings seedBase
     let runFolderExists = Directory.Exists runFolder
     let hasGeneratedRuns = not rows.IsEmpty
-    let fileIssues = rows |> List.collect collectRowFileIssues
     let effectiveRows = applyCollectExclusions rows excludedPhaseSpaceIndexes excludedNodeDigits
+    let discovery = discoverCollectScorers rows effectiveRows
+    let scorers = discovery |> Result.defaultValue []
+    let fileIssues = rows |> List.collect (collectRowFileIssues scorers)
     let effectiveRunCount = effectiveRows.Length
     let effectivePhaseSpaceCount = effectiveRows |> List.map _.PhaseSpaceIndex |> List.distinct |> List.length
     let effectiveNodeCount = effectiveRows |> List.map _.NodeDigit |> List.distinct |> List.length
@@ -237,7 +242,7 @@ let buildCollectPreflightResult
     let effectiveFileIssues =
         fileIssues |> List.filter (fun issue -> effectiveRowIds.Contains issue.RunId)
 
-    let foundCsvCount = effectiveRunCount - (effectiveFileIssues |> List.filter isCsvIssue |> List.length)
+    let foundCsvCount = effectiveRunCount * scorers.Length - (effectiveFileIssues |> List.filter isCsvIssue |> List.length)
     let missingCsvCount = effectiveFileIssues |> List.filter isCsvIssue |> List.length
     let foundLogCount = effectiveRunCount - (effectiveFileIssues |> List.filter isLogIssue |> List.length)
     let missingLogCount = effectiveFileIssues |> List.filter isLogIssue |> List.length
@@ -261,6 +266,10 @@ let buildCollectPreflightResult
                 passedCheck "Rows remain after exclusions"
             else
                 failedCheck "Rows remain after exclusions" "No rows remain after exclusions."
+
+            match discovery with
+            | Ok _ -> passedCheck "Scorer CSV families discovered"
+            | Error message -> failedCheck "Scorer CSV families discovered" message
 
             if missingCsvCount = 0 then
                 passedCheck "Input CSV files exist and contain numeric scorer rows"
@@ -287,8 +296,10 @@ let buildCollectPreflightResult
 
     {
         SeedBase = seedBase
+        Scorers = scorers |> List.map _.Name
         CanCollect =
-            hasGeneratedRuns
+            Result.isOk discovery
+            && hasGeneratedRuns
             && runFolderExists
             && effectiveRunCount > 0
             && missingCsvCount = 0
@@ -308,3 +319,4 @@ let buildCollectPreflightResult
         MissingFiles = missingFiles
         FileIssues = fileIssues
     }
+

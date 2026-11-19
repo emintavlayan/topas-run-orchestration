@@ -193,6 +193,7 @@ type CollectFileIssue = {
 
 type CollectPreflightResult = {
     SeedBase: string
+    Scorers: string list
     CanCollect: bool
     ExpectedRunCount: int
     EffectiveRunCount: int
@@ -215,8 +216,17 @@ type CollectPreviewRequest = {
     ExcludedNodeDigits: string list
 }
 
+type CollectScorerPaths = {
+    Scorer: string
+    OutputFolder: string
+    SummaryPath: string
+    UncertaintyPath: string
+    ManifestPath: string
+}
+
 type CollectPreviewResult = {
     SeedBase: string
+    Scorers: CollectScorerPaths list
     ExpectedRunCount: int
     PhaseSpaceCount: int
     NodeCount: int
@@ -243,6 +253,7 @@ type CollectedPhaseSpaceResult = {
 
 type CollectResult = {
     SeedBase: string
+    Scorers: CollectScorerPaths list
     ExpectedRunCount: int
     CsvReadCount: int
     LogFoundCount: int
@@ -262,7 +273,79 @@ type AppConfigView = {
     Placeholders: string list
 }
 
+/// Represents one collected scorer available for analysis.
+type AnalysisDataset = { Id: string; Label: string }
+/// Represents an explicitly confirmed physical coordinate mapping.
+type AnalysisMapping = { Role: string; Axis: int; StepMm: float; OriginMm: float; CaxMm: float; Confirmed: bool }
+/// Represents a sampled dose and its absolute statistical uncertainty.
+type AnalysisPoint = { Position: float; Dose: float; Uncertainty: float }
+/// Represents a collected curve with its saved coordinate mapping.
+type AnalysisCurve = { Dataset: AnalysisDataset; Mapping: AnalysisMapping option; MappingSource: string; Points: AnalysisPoint list }
+/// Represents a request to save a physical mapping beside a collected curve.
+type SaveAnalysisMapping = { Id: string; Mapping: AnalysisMapping }
+
+/// Represents the observed state of a single PHSP task.
+[<RequireQualifiedAccess>]
+type RunTaskState = NotSubmitted | Pending | Running | Suspended | Completed | Failed | Unknown
+
+/// Represents one manifest task and its latest scheduler or log evidence.
+type RunControlTask = {
+    RunId: string
+    PhaseSpaceIndex: string
+    NodeName: string
+    TaskId: int option
+    SlurmTaskId: string option
+    State: RunTaskState
+    Reason: string option
+    StartedAt: string option
+    FinishedAt: string option
+    ElapsedSeconds: float option
+    LogAvailable: bool
+}
+
+/// Represents node utilization and progress for the selected batch.
+type RunControlNode = {
+    NodeName: string
+    Tasks: RunControlTask list
+    CpuPercent: float option
+    MemoryPercent: float option
+    MemoryUsedGb: float option
+    MemoryTotalGb: float option
+    TelemetryAt: string option
+    TelemetryError: string option
+    CompletedCount: int
+    RunningCount: int
+    FailedCount: int
+    ElapsedSeconds: float option
+    RemainingSeconds: float option
+    EstimateNote: string
+}
+
+/// Represents a cached read-only view of one simulation batch.
+type RunControlSnapshot = {
+    SeedBase: string
+    CapturedAt: string
+    Nodes: RunControlNode list
+    TotalCount: int
+    CompletedCount: int
+    RunningCount: int
+    FailedCount: int
+    RemainingSeconds: float option
+    EstimatedFinishAt: string option
+    Warnings: string list
+}
+
+/// Identifies a generated run whose log tail may be inspected.
+type RunControlLogRequest = { SeedBase: string; RunId: string }
+
 type ITopasApi = {
+    getRunControlBatches: unit -> Async<Result<RunBatchSummary list, string>>
+    getRunControl: string -> Async<Result<RunControlSnapshot, string>>
+    getRunControlLog: RunControlLogRequest -> Async<Result<string, string>>
+    listAnalysisDatasets: unit -> Async<Result<AnalysisDataset list, string>>
+    loadAnalysisCurve: string -> Async<Result<AnalysisCurve, string>>
+    saveAnalysisMapping: SaveAnalysisMapping -> Async<Result<unit, string>>
+    resetAnalysisMapping: string -> Async<Result<AnalysisCurve, string>>
     getAppConfig: unit -> Async<Result<AppConfigView, string>>
     getTemplateFiles: unit -> Async<Result<TemplateFileInfo list, string>>
     previewGenerate: GeneratePreviewRequest -> Async<Result<GeneratePreviewResult, string>>
@@ -276,3 +359,4 @@ type ITopasApi = {
     previewCollect: CollectPreviewRequest -> Async<Result<CollectPreviewResult, string>>
     collectBatch: CollectRequest -> Async<Result<CollectResult, string>>
 }
+

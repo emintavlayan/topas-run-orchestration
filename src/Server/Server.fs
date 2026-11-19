@@ -148,6 +148,49 @@ let private collectBatchHandler (request: CollectRequest) : Async<Result<Collect
 
 /// Exposes the temporary TSEBT API skeleton.
 let topasApi (_: HttpContext) : ITopasApi = {
+    getRunControlBatches = fun () -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! RunControlOperation.listBatches settings
+        }
+    }
+    getRunControl = fun seedBase -> async {
+        match loadSettings () with
+        | Error error -> return Error error
+        | Ok settings ->
+            let enabled = not (String.Equals(buildConfiguration().["Tsebt:Monitoring:NodeTelemetry"],"false",StringComparison.OrdinalIgnoreCase))
+            return! RunControlOperation.getSnapshot settings enabled seedBase
+    }
+    getRunControlLog = fun request -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! RunControlOperation.getLog settings request
+        }
+    }
+    listAnalysisDatasets = fun () -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.listDatasets settings
+        }
+    }
+    loadAnalysisCurve = fun id -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.loadCurve settings id
+        }
+    }
+    saveAnalysisMapping = fun request -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.saveMapping settings request
+        }
+    }
+    resetAnalysisMapping = fun id -> async {
+        return result {
+            let! settings = loadSettings ()
+            return! AnalysisOperation.resetMapping settings id
+        }
+    }
     getAppConfig = getAppConfigHandler
     getTemplateFiles = getTemplateFilesHandler
     previewGenerate = previewGenerateHandler
@@ -194,3 +237,4 @@ let main _ =
     | Error errorMessage ->
         eprintfn "%s" errorMessage
         1
+

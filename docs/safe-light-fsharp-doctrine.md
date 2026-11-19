@@ -1,5 +1,7 @@
 # SAFE Light F# Doctrine
 
+[README](../README.md) · [All documentation](index.md)
+
 ## 1. Shape of this SAFE project
 
 ```text

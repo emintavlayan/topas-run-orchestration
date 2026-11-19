@@ -112,6 +112,7 @@ let viewCollectPreflight (collect: CollectModel) (dispatch: Msg -> unit) =
                         Html.p [ prop.text $"Effective runs: {preview.Preflight.EffectiveRunCount}" ]
                         Html.p [ prop.text $"Effective phase-spaces: {preview.Preflight.EffectivePhaseSpaceCount}" ]
                         Html.p [ prop.text $"Effective nodes: {preview.Preflight.EffectiveNodeCount}" ]
+                        Html.p [ prop.text ("Scorers: " + String.concat ", " preview.Preflight.Scorers) ]
                         Html.p [ prop.text $"CSV found/missing: {preview.Preflight.FoundCsvCount}/{preview.Preflight.MissingCsvCount}" ]
                         Html.p [ prop.text $"Logs found/missing: {preview.Preflight.FoundLogCount}/{preview.Preflight.MissingLogCount}" ]
                     ]
@@ -260,7 +261,6 @@ let viewCollectPreflight (collect: CollectModel) (dispatch: Msg -> unit) =
 let viewCollectMergeReview (collect: CollectModel) =
     match collect.Preview with
     | Loaded preview ->
-        let uncertaintyPath = joinDisplayPath [ preview.OutputFolder; "dose_with_uncertainty.csv" ]
         let collectionRootFolder = joinDisplayPath [ "outputs"; preview.SeedBase ]
         let latestCollectionFolder = defaultArg preview.LatestCollectionFolder "-"
 
@@ -296,8 +296,16 @@ let viewCollectMergeReview (collect: CollectModel) =
                     Html.none
                 Html.p $"Output folder: {preview.OutputFolder}"
                 Html.p $"Manifest: {preview.ManifestPath}"
-                Html.p $"Final merged dose: {preview.FinalSummaryPath}"
-                Html.p $"Dose uncertainty: {uncertaintyPath}"
+                for scorer in preview.Scorers do
+                    Html.div [
+                        prop.className "space-y-1 break-all"
+                        prop.children [
+                            Html.h4 [ prop.className "font-semibold"; prop.text $"Scorer: {scorer.Scorer}" ]
+                            Html.p $"Final merged dose: {scorer.SummaryPath}"
+                            Html.p $"Dose uncertainty: {scorer.UncertaintyPath}"
+                            Html.p $"Scorer manifest: {scorer.ManifestPath}"
+                        ]
+                    ]
                 Html.p $"Effective run count: {preview.Preflight.EffectiveRunCount}"
                 Html.p $"Effective phase-space count: {preview.Preflight.EffectivePhaseSpaceCount}"
                 Html.p $"Effective node count: {preview.Preflight.EffectiveNodeCount}"
@@ -329,8 +337,6 @@ let viewCollectResult (collect: CollectModel) =
     match collect.CollectResult with
     | Loading _ -> Html.p "Running collect..."
     | Loaded value ->
-        let uncertaintyPath = joinDisplayPath [ value.OutputFolder; "dose_with_uncertainty.csv" ]
-
         Html.div [
             prop.className "space-y-2 text-sm text-base-content/80"
             prop.children [
@@ -340,8 +346,16 @@ let viewCollectResult (collect: CollectModel) =
                 Html.p $"Logs found: {value.LogFoundCount}"
                 Html.p $"Merged phase-space count: {value.MergedPhaseSpaceCount}"
                 Html.p [ prop.className "break-all"; prop.text $"Output folder: {value.OutputFolder}" ]
-                Html.p [ prop.className "break-all"; prop.text $"Final merged dose path: {value.SummaryPath}" ]
-                Html.p [ prop.className "break-all"; prop.text $"Dose uncertainty path: {uncertaintyPath}" ]
+                for scorer in value.Scorers do
+                    Html.div [
+                        prop.className "space-y-1 break-all"
+                        prop.children [
+                            Html.h4 [ prop.className "font-semibold"; prop.text $"Scorer: {scorer.Scorer}" ]
+                            Html.p $"Final merged dose: {scorer.SummaryPath}"
+                            Html.p $"Dose uncertainty: {scorer.UncertaintyPath}"
+                            Html.p $"Scorer manifest: {scorer.ManifestPath}"
+                        ]
+                    ]
                 Html.p [ prop.className "break-all"; prop.text $"Manifest path: {value.ManifestPath}" ]
                 Html.h4 [ prop.className "font-semibold"; prop.text "Merged files" ]
                 Html.div [
@@ -410,3 +424,4 @@ let viewCollectPage (collect: CollectModel) (dispatch: Msg -> unit) =
         (fun () -> dispatch CancelCollectWizard)
         (fun () -> dispatch PreviousCollectStep)
         (fun () -> dispatch NextCollectStep)
+

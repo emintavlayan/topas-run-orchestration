@@ -408,6 +408,17 @@ let preflightCollect (settings: TsebtSettings) (seedBase: string) : Result<Colle
     with ex ->
         Error $"Failed running collect preflight: {ex.Message}"
 
+/// Builds all output paths for one scorer inside a collection attempt.
+let private buildScorerPaths (collectionFolder: string) (scorer: CollectScorer) : CollectScorerPaths =
+    let folder = scorerOutputFolderPath collectionFolder scorer
+    {
+        Scorer = scorer.Name
+        OutputFolder = folder
+        SummaryPath = plannedSummaryPathInOutputFolder folder
+        UncertaintyPath = plannedUncertaintyPathInOutputFolder folder
+        ManifestPath = plannedManifestPathInOutputFolder folder
+    }
+
 /// Builds collect preview including planned output paths and preflight details.
 let previewCollect (settings: TsebtSettings) (request: CollectPreviewRequest) : Result<CollectPreviewResult, string> =
     try
@@ -430,15 +441,20 @@ let previewCollect (settings: TsebtSettings) (request: CollectPreviewRequest) : 
             let outputFolder =
                 collectionOutputFolderPath (outputFolderPath settings request.SeedBase) "<timestamp>"
 
+            let scorers = discoverCollectScorers rows effectiveRows |> Result.defaultValue []
+            let scorerPaths = scorers |> List.map (buildScorerPaths outputFolder)
+
             return
                 {
                     SeedBase = request.SeedBase
+                    Scorers = scorerPaths
                     ExpectedRunCount = preflight.ExpectedRunCount
                     PhaseSpaceCount = effectiveRows |> List.map _.PhaseSpaceIndex |> List.distinct |> List.length
                     NodeCount = effectiveRows |> List.map _.NodeDigit |> List.distinct |> List.length
                     OutputFolder = outputFolder
-                    PlannedMergedFiles = plannedMergedFiles settings request.SeedBase effectiveRows
-                    FinalSummaryPath = plannedSummaryPath settings request.SeedBase
+                    PlannedMergedFiles =
+                        scorerPaths |> List.collect (fun paths -> plannedMergedFilesInOutputFolder paths.OutputFolder effectiveRows)
+                    FinalSummaryPath = scorerPaths |> List.tryHead |> Option.map _.SummaryPath |> Option.defaultValue ""
                     ManifestPath = plannedManifestPath settings request.SeedBase
                     Preflight = preflight
                     HasCollectedBefore = details.HasCollectedBefore
@@ -449,15 +465,15 @@ let previewCollect (settings: TsebtSettings) (request: CollectPreviewRequest) : 
         Error $"Failed building collect preview: {ex.Message}"
 
 /// Builds collect manifest lines from generated run rows.
-let private buildCollectManifestLines (rows: CollectRunRow list) : string list =
-    let header = "runId\tphaseSpaceIndex\tnodeDigit\tcsvPath\tlogPath"
-
+let private buildCollectManifestLines (scorers: CollectScorer list) (rows: CollectRunRow list) : string list =
+    let header = "scorer\trunId\tphaseSpaceIndex\tnodeDigit\tcsvPath\tlogPath"
     let lines =
-        rows
-        |> List.map (fun row ->
-            let csvPath, logPath = expectedCsvAndLogPaths row
-            $"{row.RunId}\t{row.PhaseSpaceIndex}\t{row.NodeDigit}\t{csvPath}\t{logPath}")
-
+        scorers
+        |> List.collect (fun scorer ->
+            rows |> List.map (fun row ->
+                let csvPath = row.OutputFilePath + scorer.Suffix + ".csv"
+                let logPath = row.OutputFilePath + ".log"
+                $"{scorer.Name}\t{row.RunId}\t{row.PhaseSpaceIndex}\t{row.NodeDigit}\t{csvPath}\t{logPath}"))
     header :: lines
 
 /// Validates output collision rules before collect writes any files.
@@ -528,6 +544,31 @@ let private mergePhaseSpaceCsvFiles
                 }
         })
     |> List.sequenceResultM
+
+/// Collects one scorer independently using the existing merge and raw-batch uncertainty calculations.
+let private collectScorer
+    (seedBase: string)
+    (collectionFolder: string)
+    (rows: CollectRunRow list)
+    (scorer: CollectScorer)
+    : Result<CollectedPhaseSpaceResult list, string> =
+    let paths = buildScorerPaths collectionFolder scorer
+    let scorerRows = scorerRunRows scorer rows
+    let rawPaths = scorerRows |> List.map (expectedCsvAndLogPaths >> fst) |> List.distinct
+    result {
+        logCollectStage seedBase "ScorerStart" $"scorer={scorer.Name}; sourceCsvCount={rawPaths.Length}"
+        do! validateCollectOutputCollisions
+                (plannedMergedFilesInOutputFolder paths.OutputFolder scorerRows)
+                paths.SummaryPath paths.UncertaintyPath
+        let! merged = mergePhaseSpaceCsvFiles paths.OutputFolder seedBase scorerRows
+        do! mergePhaseSpaceDoseCsvFiles (merged |> List.map _.MergedFilePath) paths.SummaryPath
+        do! computeDoseWithUncertaintyFromRawBatchCsvFiles rawPaths paths.UncertaintyPath
+        do! validateDoseMergedMatchesUncertainty paths.SummaryPath paths.UncertaintyPath
+        do! writeCollectManifest paths.ManifestPath (buildCollectManifestLines [ scorer ] rows)
+        logCollectStage seedBase "ScorerEnd" $"scorer={scorer.Name}; summary={paths.SummaryPath}"
+        return merged
+    }
+    |> Result.mapError (fun message -> $"Scorer '{scorer.Name}': {message}")
 
 /// Updates collect metadata columns in generated_batches after successful collect.
 let private updateCollectedBatchMetadata
@@ -602,43 +643,15 @@ let collectBatch (settings: TsebtSettings) (request: CollectRequest) : Result<Co
 
             let! outputFolder = createCollectionOutputFolder settings request.SeedBase
             attemptedOutputFolder <- Some outputFolder
-            let summaryPath = plannedSummaryPathInOutputFolder outputFolder
+            let! scorers = discoverCollectScorers rows effectiveRows
+            let scorerPaths = scorers |> List.map (buildScorerPaths outputFolder)
+            // Keep the scalar summary field compatible; full per-scorer paths are returned separately.
+            let summaryPath = scorerPaths.Head.SummaryPath
             attemptedSummaryPath <- Some summaryPath
-            let uncertaintyPath = plannedUncertaintyPathInOutputFolder outputFolder
             let manifestPath = plannedManifestPathInOutputFolder outputFolder
-            let plannedMergedFilesList = plannedMergedFilesInOutputFolder outputFolder effectiveRows
-            let rawBatchCsvPaths =
-                effectiveRows
-                |> List.map expectedCsvAndLogPaths
-                |> List.map fst
-                |> List.distinct
-
-            do! validateCollectOutputCollisions plannedMergedFilesList summaryPath uncertaintyPath
-            logCollectStage request.SeedBase "CollisionValidation" "Output collision validation passed."
-
-            logCollectStage request.SeedBase "MergeStart" "Starting phase-space CSV merge."
-
-            let! mergedFiles = mergePhaseSpaceCsvFiles outputFolder request.SeedBase effectiveRows
-            let mergedPaths = mergedFiles |> List.map _.MergedFilePath
-
-            logCollectStage
-                request.SeedBase
-                "MergeEnd"
-                $"Merged phase-space files count={mergedFiles.Length}."
-
-            logCollectStage request.SeedBase "FinalMergeStart" $"Computing final merged dose: {summaryPath}"
-            do! mergePhaseSpaceDoseCsvFiles mergedPaths summaryPath
-            logCollectStage request.SeedBase "FinalMergeEnd" $"Final merged dose written: {summaryPath}"
-
-            logCollectStage request.SeedBase "UncertaintyStart" $"Computing dose uncertainty: {uncertaintyPath}"
-            do! computeDoseWithUncertaintyFromRawBatchCsvFiles rawBatchCsvPaths uncertaintyPath
-            logCollectStage request.SeedBase "UncertaintyEnd" $"Dose uncertainty written: {uncertaintyPath}"
-
-            logCollectStage request.SeedBase "ValidationStart" "Validating final merged dose against uncertainty dose."
-            do! validateDoseMergedMatchesUncertainty summaryPath uncertaintyPath
-            logCollectStage request.SeedBase "ValidationEnd" "Final merged dose matches uncertainty dose."
-
-            let manifestLines = buildCollectManifestLines effectiveRows
+            let! scorerMergedFiles = scorers |> List.traverseResultM (collectScorer request.SeedBase outputFolder effectiveRows)
+            let mergedFiles = scorerMergedFiles |> List.concat
+            let manifestLines = buildCollectManifestLines scorers effectiveRows
             logCollectStage request.SeedBase "ManifestWriteStart" $"Writing collect manifest: {manifestPath}"
             do! writeCollectManifest manifestPath manifestLines
             logCollectStage request.SeedBase "ManifestWriteEnd" $"Collect manifest written: {manifestPath}"
@@ -661,10 +674,11 @@ let collectBatch (settings: TsebtSettings) (request: CollectRequest) : Result<Co
             return
                 {
                     SeedBase = request.SeedBase
+                    Scorers = scorerPaths
                     ExpectedRunCount = preflight.EffectiveRunCount
                     CsvReadCount = preflight.FoundCsvCount
                     LogFoundCount = preflight.FoundLogCount
-                    MergedPhaseSpaceCount = mergedFiles.Length
+                    MergedPhaseSpaceCount = preflight.EffectivePhaseSpaceCount
                     OutputFolder = outputFolder
                     SummaryPath = summaryPath
                     MergedFiles = mergedFiles
@@ -705,3 +719,4 @@ let collectBatch (settings: TsebtSettings) (request: CollectRequest) : Result<Co
             ()
 
         Error errorMessage
+
