@@ -123,7 +123,18 @@ let View () =
 
                     if live then
                         match result with
-                        | Ok values -> setInputs values
+                        | Ok values ->
+                            setInputs values
+
+                            if not (values |> List.exists (fun input -> input.Id = inputId)) then
+                                let previousRun = inputId.Split('/')[0]
+
+                                let next =
+                                    values
+                                    |> List.tryFind (fun input -> input.Batch = previousRun)
+                                    |> Option.orElseWith (fun () -> List.tryHead values)
+
+                                setInputId (next |> Option.map _.Id |> Option.defaultValue "")
                         | Error reason -> setError reason
                 with ex ->
                     if live then
@@ -232,6 +243,13 @@ let View () =
         setView name
         setReset (fun current -> current + 1)
 
+    /// Uses one focus request for toolbar, tree and canvas interactions.
+    let focusComponent name =
+        setSelected name
+        setFocused name
+        setView "preserve"
+        setReset (fun current -> current + 1)
+
     Html.section [
         prop.className "scene-workspace"
         prop.children [
@@ -240,22 +258,16 @@ let View () =
                 prop.children [
                     Html.label [
                         prop.children [
-                            Html.span "Generated input "
+                            Html.span "Run ID "
                             Html.select [
                                 prop.className "select select-bordered select-sm"
                                 prop.value inputId
                                 prop.onChange setInputId
-                                prop.custom ("aria-label", "Generated input")
+                                prop.custom ("aria-label", "Geometry run ID")
                                 prop.children [
-                                    Html.option [ prop.value ""; prop.text "Select a generated input" ]
-                                    for batch, items in inputs |> List.groupBy _.Batch do
-                                        Html.optgroup [
-                                            prop.label batch
-                                            prop.children [
-                                                for input in items ->
-                                                    Html.option [ prop.value input.Id; prop.text input.FileName ]
-                                            ]
-                                        ]
+                                    Html.option [ prop.value ""; prop.text "Select a run" ]
+                                    for input in inputs do
+                                        Html.option [ prop.value input.Id; prop.text input.Batch ]
                                 ]
                             ]
                         ]
@@ -273,10 +285,7 @@ let View () =
                         prop.className "analysis-button"
                         prop.text "Focus selected"
                         prop.disabled (String.IsNullOrEmpty selected)
-                        prop.onClick (fun _ ->
-                            setFocused selected
-                            setView "preserve"
-                            setReset (fun current -> current + 1))
+                        prop.onClick (fun _ -> focusComponent selected)
                     ]
                     Html.label [
                         prop.children [
@@ -343,7 +352,9 @@ let View () =
                                                 else
                                                     "Isolate selected"
                                             )
-                                            prop.disabled (String.IsNullOrEmpty selected && String.IsNullOrEmpty isolated)
+                                            prop.disabled (
+                                                String.IsNullOrEmpty selected && String.IsNullOrEmpty isolated
+                                            )
                                             prop.onClick (fun _ ->
                                                 setIsolated (if isolated <> "" then "" else selected))
                                         ]
@@ -374,6 +385,7 @@ let View () =
                                             Html.button [
                                                 prop.text (c.Name + (if c.Included then "" else " (excluded)"))
                                                 prop.onClick (fun _ -> setSelected c.Name)
+                                                prop.onDoubleClick (fun _ -> focusComponent c.Name)
                                             ]
                                         ]
                                     ]
@@ -416,6 +428,17 @@ let View () =
                                                 ]
                                             for source in value.Sources |> List.filter (fun s -> s.Component = c.Name) do
                                                 Html.p (source.Name + " · " + source.SourceType)
+
+                                                match source.Bounds with
+                                                | Some bounds ->
+                                                    Html.p (
+                                                        sprintf
+                                                            "PHSP size (mm): %.2f × %.2f × %.2f"
+                                                            (bounds.Max.X - bounds.Min.X)
+                                                            (bounds.Max.Y - bounds.Min.Y)
+                                                            (bounds.Max.Z - bounds.Min.Z)
+                                                    )
+                                                | None -> ()
                                         ]
                                     ]
                             ]
@@ -442,7 +465,19 @@ let View () =
                                              |> List.toArray)
                                         "sources"
                                         ==> (value.Sources
-                                             |> List.map (fun s -> createObj [ "component" ==> s.Component ])
+                                             |> List.map (fun s ->
+                                                 createObj [
+                                                     "name" ==> s.Name
+                                                     "component" ==> s.Component
+                                                     "bounds"
+                                                     ==> (s.Bounds
+                                                          |> Option.map (fun bounds ->
+                                                              createObj [
+                                                                  "min" ==> coordinates bounds.Min
+                                                                  "max" ==> coordinates bounds.Max
+                                                              ])
+                                                          |> Option.toObj)
+                                                 ])
                                              |> List.toArray)
                                         "assets"
                                         ==> (assets
@@ -452,6 +487,7 @@ let View () =
                                         "hidden" ==> (hidden |> Set.toArray)
                                         "selected" ==> selected
                                         "onSelect" ==> setSelected
+                                        "onFocus" ==> focusComponent
                                         "focused" ==> focused
                                         "isolated" ==> isolated
                                         "mode" ==> mode
@@ -461,11 +497,7 @@ let View () =
                                         "showSources" ==> sources
                                     ]
                                 )
-                                Html.p [
-                                    prop.className "scene-caption"
-                                    prop.text
-                                        "Drag to orbit · Right-drag or Shift+drag to pan · Scroll to zoom · Double-click to focus · Source squares show local frames, not phase-space extents."
-                                ]
+
                             ]
                         ]
                     ]

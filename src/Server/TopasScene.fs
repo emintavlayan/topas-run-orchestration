@@ -251,6 +251,24 @@ let private scorer (values: Map<string, string>) name = result {
     }
 }
 
+/// Reads source position transforms with the same scale precedence as TOPAS.
+let private sourceScale values prefix axis = result {
+    let scaleKey = prefix + "PhaseSpaceScale" + axis + "PosBy"
+
+    let! scale =
+        if Map.containsKey scaleKey values then
+            number values Count scaleKey
+        else
+            boolean values false (prefix + "PhaseSpaceIgnore" + axis + "Pos")
+            |> Result.map (fun ignored -> if ignored then 0. else 1.)
+
+    if scale < 0. then
+        return! Error $"Source position scale must be non-negative: {scaleKey}"
+
+    let! inverted = boolean values false (prefix + "PhaseSpaceInvert" + axis + "Axis")
+    return scale * (if inverted then -1. else 1.)
+}
+
 /// Checks explicit parents, cycles and scorer/source ownership before rendering.
 let private validateRelationships
     (components: SceneComponent list)
@@ -326,10 +344,18 @@ let parse text : Result<SimulationScene, string> =
                      let! owner = required values ("So/" + name + "/Component")
                      let! kind = required values ("So/" + name + "/Type")
 
+                     let prefix = "So/" + name + "/"
+                     let! x = sourceScale values prefix "X"
+                     let! y = sourceScale values prefix "Y"
+                     let! z = sourceScale values prefix "Z"
+
                      return {
                          Name = name
                          Component = owner
                          SourceType = kind
+                         FilePath = Map.tryFind (prefix + "PhaseSpaceFileName") values
+                         PositionScale = { X = x; Y = y; Z = z }
+                         Bounds = None
                      }
                  })
                  |> List.sequenceResultM)

@@ -21,3 +21,23 @@ test('scorer bins and selected surfaces use true local positions',()=>{const c=c
 test('display reflection places source above phantom without changing physical inputs',()=>{const source=[0,0,-1000],tank=[0,0,150];assert.ok(displayPoint(source)[2]>displayPoint(tank)[2]);near(source,[0,0,-1000]);});
 test('focus fits selected geometry rather than distant head',()=>{const cs=[{...component('World'),kind:'group'},component('Head','World',[0,0,-1000]),component('Scorer','World',[0,0,13])],{entries}=buildGeometries(cs,{});const all=sceneBounds(entries,cs),focused=sceneBounds(entries,cs,[],'Scorer');near(focused.getCenter(new THREE.Vector3()).toArray(),[0,0,-13]);assert.ok(all.getSize(new THREE.Vector3()).z>1000);near(focused.getSize(new THREE.Vector3()).toArray(),[2,4,6]);for(const e of entries)e.geometry.dispose();});
 test('narrow camera framing expands distance to fit both dimensions',()=>{const box=new THREE.Box3(new THREE.Vector3(-300,-300,-150),new THREE.Vector3(300,300,150));assert.ok(fitDistance(box,40,.5)>fitDistance(box,40,2));});
+
+test('source footprint keeps exact asymmetric header bounds under nested placements',()=>{
+    const cs=[{...component('World'),kind:'group'},{...component('Frame','World',[10,20,-733],[0,90,0]),kind:'group'}];
+    const sources=[{component:'Frame',bounds:{min:new Float64Array([-65,-40,0]),max:new Float64Array([65,50,0])}}];
+    const {entries}=buildGeometries(cs,{},sources);
+    assert.equal(entries.length,1);assert.equal(entries[0].source,true);
+    entries[0].geometry.computeBoundingBox();near(entries[0].geometry.boundingBox.min.toArray(),[-65,-40,0]);near(entries[0].geometry.boundingBox.max.toArray(),[65,50,0]);
+    const box=sceneBounds(entries,cs,[],'Frame');near(box.min.toArray(),[10,-20,668]);near(box.max.toArray(),[10,70,798]);
+    entries[0].geometry.dispose();
+});
+test('unknown source dimensions create no fabricated footprint',()=>{
+    const cs=[{...component('Frame'),kind:'group'}];assert.equal(buildGeometries(cs,{},[{component:'Frame',bounds:null}]).entries.length,0);
+});
+test('selection does not change picking through a transparent enclosure',async()=>{
+    const {pickComponent}=await import('../../src/Client/SceneGeometry.mjs');
+    const tank={object:{userData:{component:'Tank',pickThrough:true},material:{opacity:.23}}};
+    const scorer={object:{userData:{component:'Scorer',pickThrough:false},material:{opacity:.85}}};
+    assert.equal(pickComponent([tank,scorer]),'Scorer');tank.object.material.opacity=.5;
+    assert.equal(pickComponent([tank,scorer]),'Scorer');assert.equal(pickComponent([tank]),'Tank');
+});

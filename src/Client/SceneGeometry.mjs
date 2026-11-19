@@ -52,12 +52,21 @@ export function localGeometry(component,assets) {
     return null;
 }
 /// Builds reusable physical geometries and reports individual mesh errors.
-export function buildGeometries(components,assets) {
+export function buildGeometries(components,assets,sources=[]) {
     const entries=[],warnings=[];
     for(const component of components){
         if(component.name==='World')continue;
         try{const geometry=localGeometry(component,assets);if(geometry)entries.push({name:component.name,geometry,matrix:new THREE.Matrix4().fromArray(worldMatrix(component.name,components))});}
         catch(error){warnings.push(`${component.name}: ${error.message}`);}
+    }
+    for(const source of sources){
+        if(!source.bounds)continue;
+        const {min,max}=source.bounds;
+        const dimensions=Array.from(max,(value,i)=>value-min[i]);
+        const center=Array.from(max,(value,i)=>(value+min[i])/2);
+        const geometry=new THREE.BoxGeometry(...dimensions);
+        geometry.translate(...center);
+        entries.push({name:source.component,source:true,sourceName:source.name,geometry,matrix:new THREE.Matrix4().fromArray(worldMatrix(source.component,components))});
     }
     return {entries,warnings};
 }
@@ -107,4 +116,10 @@ export function scorerSegments(component,scorers) {
         }
     }
     return segments;
+}
+
+/// Chooses behind transparent enclosures without changing priority when selection changes.
+export function pickComponent(intersections) {
+    const hits=intersections.filter(hit=>hit.object.userData.component);
+    return (hits.find(hit=>!hit.object.userData.pickThrough)??hits[0])?.object.userData.component;
 }

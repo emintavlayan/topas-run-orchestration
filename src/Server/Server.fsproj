@@ -32,6 +32,7 @@
     <Compile Include="SqliteInit.fs" />
     <Compile Include="RunControlOperation.fs" />
     <Compile Include="TopasScene.fs" />
+    <Compile Include="PhaseSpaceGeometry.fs" />
     <Compile Include="SceneOperation.fs" />
     <Compile Include="Server.fs" />
     <Content Update="appsettings.json">

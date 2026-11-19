@@ -40,11 +40,17 @@ type SceneScorer = {
     Active: bool
 }
 
+/// Represents measured local source bounds in millimetres.
+type SceneBounds = { Min: SceneVector; Max: SceneVector }
+
 /// Represents a particle source attached to a geometry frame.
 type SceneSource = {
     Name: string
     Component: string
     SourceType: string
+    FilePath: string option
+    PositionScale: SceneVector
+    Bounds: SceneBounds option
 }
 
 /// Represents an inspected simulation without any renderer-specific objects.

@@ -35,29 +35,6 @@ let confinedPath root relative =
     with ex ->
         Error ex.Message
 
-/// Lists generated inputs without reading templates or starting simulations.
-let listInputs (settings: TsebtSettings) =
-    try
-        let root = Path.Combine(settings.AppRoot, settings.Paths.Inputs)
-
-        if not (Directory.Exists root) then
-            Ok []
-        else
-            Directory.EnumerateDirectories root
-            |> Seq.filter (fun folder -> not (File.GetAttributes(folder).HasFlag FileAttributes.ReparsePoint))
-            |> Seq.collect (fun folder -> Directory.EnumerateFiles(folder, "*.txt", SearchOption.TopDirectoryOnly))
-            |> Seq.filter (fun file -> not (File.GetAttributes(file).HasFlag FileAttributes.ReparsePoint))
-            |> Seq.map (fun file -> {
-                Id = Path.GetRelativePath(root, file).Replace('\\', '/')
-                Batch = DirectoryInfo(Path.GetDirectoryName file).Name
-                FileName = Path.GetFileName file
-            })
-            |> Seq.sortByDescending (fun input -> input.Batch, input.FileName)
-            |> Seq.toList
-            |> Ok
-    with ex ->
-        Error $"Cannot list generated inputs: {ex.Message}"
-
 /// Loads only an existing generated input with a bounded file size.
 let private readInput (settings: TsebtSettings) id = result {
     let! path = confinedPath (Path.Combine(settings.AppRoot, settings.Paths.Inputs)) id
@@ -71,10 +48,104 @@ let private readInput (settings: TsebtSettings) id = result {
     return path, File.ReadAllText path
 }
 
-/// Parses a selected generated input without mutating it.
+/// Selects the first readable geometry input from each run in deterministic order.
+let listInputs (settings: TsebtSettings) =
+    try
+        let root = Path.Combine(settings.AppRoot, settings.Paths.Inputs)
+
+        if not (Directory.Exists root) then
+            Ok []
+        else
+            Directory.EnumerateDirectories root
+            |> Seq.filter (fun folder -> not (File.GetAttributes(folder).HasFlag FileAttributes.ReparsePoint))
+            |> Seq.sortByDescending (fun folder -> DirectoryInfo(folder).Name)
+            |> Seq.choose (fun folder ->
+                Directory.EnumerateFiles(folder, "*.txt", SearchOption.TopDirectoryOnly)
+                |> Seq.sortBy Path.GetFileName
+                |> Seq.tryPick (fun file ->
+                    let id = Path.GetRelativePath(root, file).Replace('\\', '/')
+
+                    match readInput settings id |> Result.bind (snd >> TopasScene.parse) with
+                    | Ok _ ->
+                        Some {
+                            Id = id
+                            Batch = DirectoryInfo(folder).Name
+                            FileName = Path.GetFileName file
+                        }
+                    | Error _ -> None))
+            |> Seq.toList
+            |> Ok
+    with ex ->
+        Error $"Cannot list generated inputs: {ex.Message}"
+
+/// Resolves source headers using the simulation working directory, including external source libraries.
+let private sourceBounds workingDirectory (source: SceneSource) = result {
+    let! file = source.FilePath |> Result.requireSome "PhaseSpaceFileName is missing."
+
+    let file =
+        if Path.IsPathRooted file then
+            file
+        else
+            Path.Combine(workingDirectory, file)
+
+    let stem =
+        if
+            [ ".phsp"; ".IAEAphsp"; ".header"; ".IAEAheader" ]
+            |> List.exists (fun suffix -> file.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        then
+            Path.Combine(Path.GetDirectoryName file, Path.GetFileNameWithoutExtension file)
+        else
+            file
+
+    let! path =
+        [ stem + ".header"; stem + ".IAEAheader" ]
+        |> List.tryFind File.Exists
+        |> Result.requireSome "Phase-space header not found."
+
+    use stream = File.OpenRead path
+
+    if stream.Length > 1024L * 1024L then
+        return! Error "Phase-space header exceeds 1 MiB."
+
+    use reader = new StreamReader(stream)
+    let text = reader.ReadToEnd()
+    return! PhaseSpaceGeometry.parseBounds source.PositionScale text
+}
+
+/// Adds measured source bounds while retaining the scene when a source header is unavailable.
+let private enrichSources workingDirectory (scene: SimulationScene) =
+    let sources, warnings =
+        scene.Sources
+        |> List.map (fun source ->
+            if not (String.Equals(source.SourceType, "PhaseSpace", StringComparison.OrdinalIgnoreCase)) then
+                source, None
+            else
+                let bounds =
+                    try
+                        sourceBounds workingDirectory source
+                    with ex ->
+                        Error ex.Message
+
+                match bounds with
+                | Ok bounds -> { source with Bounds = Some bounds }, None
+                | Error reason -> source, Some $"{source.Name}: phase-space footprint unavailable. {reason}")
+        |> List.unzip
+
+    {
+        scene with
+            Sources = sources
+            Warnings = scene.Warnings @ List.choose id warnings
+    }
+
+/// Parses a selected generated input and resolves source headers without mutating simulation data.
 let load settings id =
     try
-        readInput settings id |> Result.bind (snd >> TopasScene.parse)
+        result {
+            let! path, text = readInput settings id
+            let! scene = TopasScene.parse text
+            let batch = DirectoryInfo(Path.GetDirectoryName path).Name
+            return enrichSources (Path.Combine(settings.AppRoot, settings.Paths.Runs, batch)) scene
+        }
     with ex ->
         Error $"Cannot load generated input: {ex.Message}"
 

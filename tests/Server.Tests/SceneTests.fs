@@ -127,3 +127,112 @@ let ``generated input and asset access stay within workspace`` () =
         SceneOperation.confinedPath root "../outside.stl" |> assertError |> ignore
     finally
         Directory.Delete(root, true)
+
+/// Represents an asymmetric IAEA footprint with a constant scoring-plane Z coordinate.
+let private sourceHeader =
+    """
+$RECORD_CONTENTS:
+1 // X
+1 // Y
+0 // Z
+1 // U
+1 // V
+0 // W
+0 // weight
+0 // extra floats
+0 // extra ints
+$RECORD_CONSTANT:
+26.7 // Z in cm
+$STATISTICAL_INFORMATION_GEOMETRY:
+direction min max
+x -6.5 6.5
+y -4.0 5.0
+"""
+
+/// Checks centimetres, asymmetric bounds, ignored Z, scaling and axis inversion.
+[<Fact>]
+let ``phase space uses measured header bounds and source transforms`` () =
+    let bounds =
+        PhaseSpaceGeometry.parseBounds { X = -2.; Y = 1.; Z = 0. } sourceHeader
+        |> assertOk
+
+    Assert.Equal({ X = -130.; Y = -40.; Z = 0. }, bounds.Min)
+    Assert.Equal({ X = 130.; Y = 50.; Z = 0. }, bounds.Max)
+
+    let placed =
+        PhaseSpaceGeometry.parseBounds { X = 1.; Y = 1.; Z = 1. } sourceHeader
+        |> assertOk
+
+    Assert.Equal(0., placed.Min.Z)
+    Assert.Equal(0., placed.Max.Z)
+
+/// Checks unlabeled IAEA ranges and rejects missing, reversed or non-finite bounds.
+[<Fact>]
+let ``phase space never substitutes illustrative dimensions`` () =
+    let scale = { X = 1.; Y = 1.; Z = 0. }
+
+    let anonymous =
+        sourceHeader.Replace("direction min max\nx -6.5 6.5\ny -4.0 5.0", "-6.5 6.5\n-4.0 5.0")
+
+    Assert.Equal(PhaseSpaceGeometry.parseBounds scale sourceHeader, PhaseSpaceGeometry.parseBounds scale anonymous)
+
+    PhaseSpaceGeometry.parseBounds scale "$RECORD_LENGTH:\n21\n"
+    |> assertError
+    |> ignore
+
+    PhaseSpaceGeometry.parseBounds scale (sourceHeader.Replace("x -6.5 6.5", "x 6.5 -6.5"))
+    |> assertError
+    |> ignore
+
+    PhaseSpaceGeometry.parseBounds scale (sourceHeader.Replace("x -6.5 6.5", "x -1e999 1e999"))
+    |> assertError
+    |> ignore
+
+/// Checks TOPAS scale precedence over deprecated ignore flags and local inversion.
+[<Fact>]
+let ``source transforms retain TOPAS precedence`` () =
+    let text =
+        geometry
+        + "\nu:So/PHSP/PhaseSpaceScaleXPosBy = 2\nb:So/PHSP/PhaseSpaceIgnoreXPos = \"true\"\nb:So/PHSP/PhaseSpaceInvertXAxis = \"true\"\nb:So/PHSP/PhaseSpaceIgnoreZPos = \"true\""
+
+    let source = (TopasScene.parse text |> assertOk).Sources.Head
+    Assert.Equal({ X = -2.; Y = 1.; Z = 0. }, source.PositionScale)
+
+    TopasScene.parse (text + "\nu:So/PHSP/PhaseSpaceScaleYPosBy = -1")
+    |> assertError
+    |> ignore
+
+/// Checks one representative per run, deterministic fallback and source-library header resolution.
+[<Fact>]
+let ``run discovery groups duplicate inputs and reads referenced source headers`` () =
+    let root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+
+    try
+        let input = Path.Combine(root, "inputs", "1117")
+        let run = Path.Combine(root, "runs", "1117")
+        Directory.CreateDirectory input |> ignore
+        Directory.CreateDirectory run |> ignore
+        let settings = buildSettings root
+
+        let text =
+            geometry
+            + "\ns:So/PHSP/PhaseSpaceFileName = \"source\"\nb:So/PHSP/PhaseSpaceIgnoreZPos = \"true\""
+
+        File.WriteAllText(Path.Combine(input, "a.txt"), "invalid geometry")
+        File.WriteAllText(Path.Combine(input, "b.txt"), text)
+        File.WriteAllText(Path.Combine(input, "c.txt"), text)
+        File.WriteAllText(Path.Combine(run, "source.header"), sourceHeader)
+        let inputs = SceneOperation.listInputs settings |> assertOk
+        Assert.Single inputs |> ignore
+        Assert.Equal("1117", inputs.Head.Batch)
+        Assert.Equal("b.txt", inputs.Head.FileName)
+        let scene = SceneOperation.load settings inputs.Head.Id |> assertOk
+        let bounds = scene.Sources.Head.Bounds |> Option.get
+        Assert.Equal(130., bounds.Max.X - bounds.Min.X)
+        Assert.Empty scene.Warnings
+        File.Delete(Path.Combine(run, "source.header"))
+        let unavailable = SceneOperation.load settings inputs.Head.Id |> assertOk
+        Assert.True(unavailable.Sources.Head.Bounds.IsNone)
+        Assert.Single unavailable.Warnings |> ignore
+    finally
+        Directory.Delete(root, true)
