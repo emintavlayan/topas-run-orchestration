@@ -23,6 +23,7 @@
         <Compile Include="AnalysisViews.fs" />
         <Compile Include="ImportViews.fs" />
         <Compile Include="RunControlViews.fs" />
+        <Compile Include="SceneViews.fs" />
         <Compile Include="PageViews.fs" />
         <Compile Include="Index.fs" />
         <Compile Include="App.fs" />

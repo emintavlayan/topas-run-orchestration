@@ -199,6 +199,7 @@ let pageLabel (page: Page) : string =
     | Import -> "Import"
     | Analyse -> "Analyse"
     | RunControl -> "Run Control"
+    | Geometry -> "Geometry"
 
 /// Returns display text for a wizard step heading.
 let stepLabel (step: GenerateStep) : string =

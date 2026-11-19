@@ -143,6 +143,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     match msg with
     | SelectPage page ->
         match page with
+        | GenerateTypes.Page.Geometry -> {model with SelectedPage=GenerateTypes.Page.Geometry}, Cmd.none
         | GenerateTypes.Page.RunControl -> {model with SelectedPage=GenerateTypes.Page.RunControl}, Cmd.none
         | GenerateTypes.Page.Import -> {model with SelectedPage=GenerateTypes.Page.Import}, Cmd.none
         | GenerateTypes.Page.Analyse -> {model with SelectedPage=GenerateTypes.Page.Analyse}, Cmd.none
