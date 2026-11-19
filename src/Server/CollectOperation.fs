@@ -684,11 +684,14 @@ let collectBatch (settings: TsebtSettings) (request: CollectRequest) : Result<Co
                     MergedFiles = mergedFiles
                     ManifestPath = manifestPath
                     Status = "Collected"
+                    DatasetRegistration = Error "Dataset registration pending."
                 }
         }
 
         match operationResult with
-        | Ok collected -> Ok collected
+        | Ok collected ->
+            let registration = DatasetOperation.registerCollectedResult settings collected |> Result.map _.Id
+            Ok {collected with DatasetRegistration=registration}
         | Error errorMessage ->
             recordCollectionAttemptFailureBestEffort
                 request.SeedBase

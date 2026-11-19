@@ -8,8 +8,10 @@ type Page =
     | Generate
     | Run
     | Collect
+    | Import
     | Analyse
     | RunControl
+    | Geometry
 
 /// Represents the visual theme selected for the client shell.
 type ThemeName =

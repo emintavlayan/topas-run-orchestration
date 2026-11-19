@@ -147,3 +147,37 @@ let ``Partial acceptance does not invent submissions on other nodes and missing 
         Assert.NotEmpty(missing.Warnings)
         let affected=missing.Nodes |> List.find(fun node -> node.NodeName="node01")
         Assert.All(affected.Tasks,fun task -> Assert.Equal(None,task.TaskId);Assert.Equal(RunTaskState.Unknown,task.State)))
+
+[<Fact>]
+let ``Live overview groups current and upcoming runs by configured node with shared scheduler queries`` () =
+    withBatch(fun settings folder ->
+        RunControlStore.recordSubmission settings "1001" "node01" "90" "manifest" |> assertOk |> ignore
+        let next=Path.Combine(settings.AppRoot,"runs","1002")
+        Directory.CreateDirectory next |> ignore
+        use connection=new SqliteConnection("Data Source="+Path.Combine(settings.AppRoot,"database","app.db"))
+        connection.Open()
+        seedGeneratedBatch connection "1002" ["next","01","1","input.txt",Path.Combine(next,"next")]
+        RunControlStore.recordSubmission settings "1002" "node01" "91" "manifest" |> assertOk |> ignore
+        File.WriteAllText(Path.Combine(next,"run_manifest_node01.tsv"),"task_id\tnode_name\trun_id\n1\tnode01\tnext")
+        let calls=ResizeArray<string>()
+        /// Returns current and upcoming arrays without requiring a run selector.
+        let runner (command:RunControlProbe.Command) =
+            calls.Add command.Executable
+            async.Return(Ok(if command.Executable="squeue" then "90|2|tsebt-1001-node01|RUNNING|0:20|N/A||node01\n91|1|tsebt-1002-node01|PENDING|0:00|N/A|Resources|" else ""))
+        let overview=buildOverviewWith runner false DateTimeOffset.UtcNow settings |> Async.RunSynchronously |> assertOk
+        Assert.Equal(2,overview.Nodes.Length)
+        Assert.Equal(2,overview.Runs.Length)
+        Assert.Contains(overview.Activities,fun activity -> activity.SeedBase="1001" && activity.State=RunTaskState.Running)
+        Assert.Contains(overview.Activities,fun activity -> activity.SeedBase="1002" && activity.State=RunTaskState.Pending)
+        Assert.DoesNotContain(overview.Activities,fun activity -> activity.NodeName="node02")
+        Assert.Equal<string list>(["squeue";"sacct"],List.ofSeq calls))
+
+[<Fact>]
+let ``Unrelated non-array jobs do not appear as application runs or trigger an outage`` () =
+    withBatch(fun settings _ ->
+        /// Supplies a normal unrelated interactive Slurm job.
+        let runner (_:RunControlProbe.Command)=async.Return(Ok "55|N/A|interactive|RUNNING|1:00|N/A|node01|node01")
+        let overview=buildOverviewWith runner false DateTimeOffset.UtcNow settings |> Async.RunSynchronously |> assertOk
+        Assert.Empty(overview.Activities)
+        Assert.Empty(overview.Runs)
+        Assert.Empty(overview.Warnings))

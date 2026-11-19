@@ -38,7 +38,6 @@ The server creates the root subfolders and SQLite database at startup. Copy your
 From the repository root:
 
 ```text
-fnm use 20
 dotnet run --project Build.fsproj
 ```
 
@@ -48,7 +47,7 @@ Keep the terminal open. Ctrl+C stops the development processes. Running only `sr
 
 ## 3. Check the setup
 
-- The four tabs open and the configured AppRoot is shown.
+- The workflow tabs open and the configured AppRoot is shown.
 - Generate lists the templates you copied.
 - Analyse finds results only after collected outputs and their archived inputs are available under AppRoot.
 - Run submission requires Slurm/TOPAS on the host executing the server; starting this UI on Windows does not submit through SSH to a Linux cluster.

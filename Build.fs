@@ -15,6 +15,8 @@ let sharedTestsPath = Path.getFullName "tests/Shared"
 let serverTestsPath = Path.getFullName "tests/Server"
 let clientTestsPath = Path.getFullName "tests/Client"
 
+Target.create "PrepareNode" (fun _ -> prepareNodeEnvironment ())
+
 Target.create "Clean" (fun _ ->
     Shell.cleanDir deployPath
     run dotnet [ "fable"; "clean"; "--yes" ] clientPath // Delete *.fs.js files created by Fable
@@ -75,10 +77,10 @@ Target.create "Format" (fun _ -> run dotnet [ "fantomas"; "." ] ".")
 open Fake.Core.TargetOperators
 
 let dependencies = [
-    "Clean" ==> "RestoreClientDependencies" ==> "Bundle" ==> "Azure"
+    "PrepareNode" ==> "Clean" ==> "RestoreClientDependencies" ==> "Bundle" ==> "Azure"
     "Clean" ==> "RestoreClientDependencies" ==> "Build" ==> "Run"
 
-    "RestoreClientDependencies" ==> "Build" ==> "RunTestsHeadless"
+    "PrepareNode" ==> "RestoreClientDependencies" ==> "Build" ==> "RunTestsHeadless"
     "RestoreClientDependencies" ==> "Build" ==> "WatchRunTests"
 ]
 

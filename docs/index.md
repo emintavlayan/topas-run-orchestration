@@ -11,7 +11,8 @@
 | Start the app locally | [Local setup](onboarding.md) |
 | Connect the app to your folders and cluster | [Configuration](configuration.md) |
 | Follow live Slurm progress and configure CPU/RAM | [Run Control](run-control-guide.md) |
-| Read and compare collected results | [Analysis guide](analysis-guide.md) |
+| Import measurements or manage saved dataset versions | [Import guide](import-guide.md) |
+| Read and compare saved curves | [Analysis guide](analysis-guide.md) |
 | Find a CSV, understand its columns or recover a batch identity | [Data reference](data-reference.md) |
 | Update an existing server | [Deployment](how-to-deploy.md) |
 | Install the service for the first time | [systemd setup](systemd-deployment.md) |
@@ -37,3 +38,5 @@ These specifications describe implementation details; the task guides above expl
 ## Source of truth
 
 The repository contains the application and its deployment helpers. TOPAS templates and CAD assets are configured external inputs, maintained separately. Changing a current template does not rewrite previously generated inputs. A guide's example batch ID or server path is not a required naming convention for a new installation.
+
+- [Generated-input geometry viewer](geometry-viewer.md)

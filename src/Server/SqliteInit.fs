@@ -193,6 +193,8 @@ let initialize (settings: TsebtSettings) : Result<string, string> =
         ensureGeneratedBatchCollectionsTable connection
         backfillExistingCollectionHistory connection
 
-        Ok databasePath
+        match DatasetStore.initialize settings with
+        | Ok () -> Ok databasePath
+        | Error message -> Error message
     with ex ->
         Error $"Failed to initialize SQLite: {ex.Message}"

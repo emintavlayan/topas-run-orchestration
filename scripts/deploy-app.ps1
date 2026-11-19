@@ -45,6 +45,8 @@ try {
         Get-Command $command -ErrorAction Stop | Out-Null
     }
     if (-not $SkipBuild) {
+        Write-Host 'Preparing the pinned project Node environment...'
+        Invoke-CheckedCommand 'dotnet' @('run', '--project', 'Build.fsproj', '--', 'PrepareNode')
         Write-Host 'Testing server and building the complete browser/server bundle...'
         Invoke-CheckedCommand 'dotnet' @('test', 'tests/Server.Tests/Server.Tests.fsproj')
         Invoke-CheckedCommand 'dotnet' @('run', '--project', 'Build.fsproj', '--', 'Bundle')

@@ -198,3 +198,87 @@ let getLog settings (request:RunControlLogRequest) = result {
     let! task=planned |> List.tryFind(fun task -> task.RunId=request.RunId) |> Result.requireSome "Generated run not found in this batch."
     return! readTail task.LogPath
 }
+
+/// Collects all configured nodes using one shared live queue and accounting query.
+let buildOverviewWith runner telemetryEnabled (now:DateTimeOffset) settings = async {
+    match listBatches settings with
+    | Error error -> return Error error
+    | Ok batches ->
+        let warnings=ResizeArray<string>()
+        let names=settings.Nodes |> List.map _.Name
+        let command={Executable="squeue";Arguments=["--array";"--me";"--noheader";"--format=%F|%K|%j|%T|%M|%S|%R|%N"]}
+        let! rawQueue=runner command
+        let queueResult=rawQueue |> Result.bind(fun (text:string) ->
+            let lines=text.Split('\n') |> Array.filter(String.IsNullOrWhiteSpace >> not)
+            if lines |> Array.exists(fun line -> let fields=line.Split('|') in fields.Length<>8 || not(Regex.IsMatch(fields[0],@"^\d+$"))) then Error "Malformed scheduler response."
+            else Ok(lines |> Array.choose parseQueue |> Array.toList))
+        let queue=match queueResult with Ok rows -> rows | Error error -> warnings.Add("Live queue unavailable: "+error);[]
+        let activities=
+            [for batch in batches do
+                let ids=jobIds (batch.SlurmJobId |> Option.toList)
+                for name in names do
+                    let rows=queue |> List.filter(fun row -> String.Equals(row.JobName,$"tsebt-{batch.SeedBase}-{name}",StringComparison.OrdinalIgnoreCase) && (ids.IsEmpty || List.contains row.ArrayId ids))
+                    if not rows.IsEmpty then
+                        let states=rows |> List.map(fun row -> taskState (Some row) {Complete=false;Failure=None;WallSeconds=None} true |> fst)
+                        let state=if List.contains RunTaskState.Running states then RunTaskState.Running elif List.contains RunTaskState.Suspended states then RunTaskState.Suspended elif states |> List.forall((=) RunTaskState.Pending) then RunTaskState.Pending else RunTaskState.Unknown
+                        yield {SeedBase=batch.SeedBase;NodeName=name;ArrayIds=rows |> List.map _.ArrayId |> List.distinct;State=state}]
+        // During an outage inspect recent submissions, while keeping their status explicitly uncertain.
+        let selected=
+            if Result.isError queueResult then batches |> List.filter(fun batch -> batch.SlurmJobId.IsSome) |> List.truncate 3 |> List.map _.SeedBase
+            else activities |> List.map _.SeedBase |> List.distinct
+        let ids=jobIds ((batches |> List.filter(fun batch -> List.contains batch.SeedBase selected) |> List.choose _.SlurmJobId) @ (activities |> List.collect _.ArrayIds))
+        let! accounting=if ids.IsEmpty then async.Return(Ok "") else runner(accountingCommand ids)
+        /// Reuses the global scheduler responses while retaining exact batch/node task matching.
+        let scopedRunner (request:Command) =
+            if request.Executable="squeue" then
+                let requested=request.Arguments |> List.tryFind(fun argument -> argument.StartsWith("--name=")) |> Option.map(fun argument -> argument.Substring(7).Split(',') |> Set.ofArray) |> Option.defaultValue Set.empty
+                let text=queue |> List.filter(fun row -> Set.contains row.JobName requested) |> List.map(fun row ->
+                    let started=row.StartedAt |> Option.map(fun at -> at.ToString("yyyy-MM-ddTHH:mm:ss")) |> Option.defaultValue "N/A"
+                    let elapsed=row.ElapsedSeconds |> Option.map string |> Option.defaultValue "0"
+                    let reason=row.Reason |> Option.defaultValue ""
+                    $"{row.ArrayId}|{row.TaskId}|{row.JobName}|{row.State}|{elapsed}|{started}|{reason}|") |> String.concat "\n"
+                async.Return(if Result.isError queueResult then rawQueue else Ok text)
+            elif request.Executable="sacct" then async.Return accounting
+            else runner request
+        let collected=ResizeArray<RunControlSnapshot>()
+        for seed in selected do
+            let! result=buildSnapshotWith scopedRunner false now settings seed
+            match result with Ok snapshot -> collected.Add snapshot | Error error -> warnings.Add($"Run {seed}: {error}")
+        let! nodes=names |> List.map(fun name -> async {
+            let! reading=if telemetryEnabled then readNode runner now (settings.AppRoot+"|"+name) name else async.Return(unavailable "Node telemetry disabled.")
+            return {NodeName=name;Tasks=[];CpuPercent=reading.Cpu;MemoryPercent=reading.Memory;MemoryUsedGb=reading.UsedGb;MemoryTotalGb=reading.TotalGb
+                    TelemetryAt=reading.CapturedAt;TelemetryError=reading.Error;CompletedCount=0;RunningCount=0;FailedCount=0
+                    ElapsedSeconds=None;RemainingSeconds=None;EstimateNote=""} }) |> Async.Parallel
+        let outageActivities=
+            if Result.isOk queueResult then activities
+            else [
+                for snapshot in collected do
+                  for node in snapshot.Nodes do
+                    if node.Tasks |> List.exists(fun task -> task.State<>RunTaskState.Completed && task.State<>RunTaskState.Failed && task.State<>RunTaskState.NotSubmitted) then
+                        yield {SeedBase=snapshot.SeedBase;NodeName=node.NodeName;ArrayIds=[];State=RunTaskState.Unknown}]
+        return Ok {CapturedAt=now.ToString("O");Nodes=Array.toList nodes;Runs=List.ofSeq collected;Activities=outageActivities
+                   Warnings=List.ofSeq warnings @ (collected |> Seq.collect _.Warnings |> Seq.distinct |> Seq.toList)}
+}
+
+/// Shares the cluster overview between browsers without repeatedly querying Slurm.
+let private overviewGate=new SemaphoreSlim(1,1)
+let private overviews=Dictionary<string,DateTimeOffset * RunControlOverview>()
+
+/// Returns a ten-second live overview while historical snapshots remain separately accessible.
+let getOverview settings telemetryEnabled = async {
+    do! overviewGate.WaitAsync() |> Async.AwaitTask
+    try
+        let now=DateTimeOffset.UtcNow
+        let key=settings.AppRoot+"|"+string telemetryEnabled
+        match overviews.TryGetValue key with
+        | true,(at,value) when (now-at).TotalSeconds<10. -> return Ok value
+        | _ ->
+            let! result=buildOverviewWith run telemetryEnabled now settings
+            match result with
+            | Ok value ->
+                if overviews.Count>16 then overviews.Clear()
+                overviews[key] <- now,value
+            | Error _ -> ()
+            return result
+    finally overviewGate.Release() |> ignore
+}

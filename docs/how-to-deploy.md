@@ -93,3 +93,7 @@ Override the target explicitly:
 ```
 
 For initial service creation, see [systemd setup](systemd-deployment.md). Use the actual installation path consistently in `WorkingDirectory` and `ExecStart`.
+
+## Node environment
+
+The script runs the build's `PrepareNode` check before server tests. Node 20.20.2 and npm 10 are selected automatically for builds, including from stale PowerShell terminals; fnm can be discovered in WinGet's installation directories without a PATH refresh. Install fnm once if the build cannot find a matching Node installation. No shell profile or manual `fnm use` step is required. `-SkipBuild` does not require Node because it uses an existing browser bundle. See [installation](installation.md#3-prepare-the-project-node-environment).

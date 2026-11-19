@@ -68,7 +68,7 @@ let private loadCurveCore settings id useSavedMapping =
                     match AnalysisInput.infer settings id selectedAxis points.Length with
                     | Ok derived -> derived
                     | Error reason -> suggested,"Unconfirmed editable preset. Input detection: " + reason
-            return {Dataset={Id=id;Label=id.Replace("/dose_with_uncertainty.csv", "")}; Mapping=Some resolved; MappingSource=source; Points=points}
+            return {Dataset={Id=id;Label=id.Replace("/dose_with_uncertainty.csv", "")}; Mapping=Some resolved; MappingSource=source; Points=points; ValueUnit="Gy"; HasUncertainty=true}
         }
     with ex -> Error $"Cannot load curve: {ex.Message}"
 

@@ -342,6 +342,9 @@ let viewCollectResult (collect: CollectModel) =
             prop.children [
                 Html.p [ prop.className "font-semibold text-emerald-700"; prop.text "Collect completed." ]
                 Html.p $"Status: {value.Status}"
+                match value.DatasetRegistration with
+                | Ok _ -> Html.p "Dataset registered. Select it in Analyse."
+                | Error message -> Html.p [prop.className "text-warning";prop.text ($"Dataset registration failed: {message} Retry from Import → Existing simulation collections.")]
                 Html.p $"CSV files read: {value.CsvReadCount}"
                 Html.p $"Logs found: {value.LogFoundCount}"
                 Html.p $"Merged phase-space count: {value.MergedPhaseSpaceCount}"

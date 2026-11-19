@@ -59,3 +59,18 @@ Test source: [CollectTests.fs](../tests/Server.Tests/CollectTests.fs), [Analysis
 ## Run Control
 
 `RunControlTests.fs` covers expanded Slurm identities and malformed records, live-state precedence over old logs, scheduler and TOPAS completion agreement, real-time parsing, serial/concurrent ETA and missing-evidence cases, CPU counter deltas and guest exclusion, persistent partial submissions, out-of-order scheduler rows, completed elapsed-time freezing, log fallback during scheduler outages, and bounded log access restricted to a stored batch/run pair. Scheduler responses are injected; live cluster access and SSH credentials require verification on the deployed server.
+
+## Build environment
+
+`BuildNodeEnvironmentTests.fs` covers matching installations without fnm, inherited Node 24 replacement, direct use of the selected npm, missing-version installation, WinGet discovery without PATH entries, installation/npm-version failures, and exact repository pins. The preparation target is a dependency of client build/development paths, and deployment invokes it before server tests.
+
+Live overview regression coverage checks current/upcoming runs on configured nodes and verifies that Slurm responses are shared across runs. Browser smoke checks cover progressive task disclosure, single-PHSP history, modal size and keyboard dismissal, polling and switching between live/history views.
+
+## Saved datasets and import
+
+
+`DatasetTests.fs` covers exact original bytes, server-side reparsing rather than trusting preview samples, required metadata and confirmation, invalid scans, independent imports, metadata revision conflicts, cascading deletion, bounded MCC scan identity and historical collection snapshots. Server and client compilation pass under .NET SDK 8.0.420. All 74 server Fact methods, including the dataset tests, pass through direct invocation with xUnit assertions. VSTest crashes in this environment; Fable compilation is blocked by subprocess process inspection. Run `dotnet test tests/Server.Tests/Server.Tests.fsproj` locally for standard-runner verification. Native MCC/SNC compatibility still requires actual measurement exports.
+
+## Vendor import validation
+
+SNC relative-dose table and MCC CC-Export V1.9 metadata regression tests bring the server suite to 84 passing Fact methods by direct invocation. Both client and server compile. The two supplied SNC files parse as one scan each (1001 X-profile and 102 PDD samples); each supplied MCC file parses as four independent scans. No vendor originals are added to the public repository. Browser/Fable validation remains pending.

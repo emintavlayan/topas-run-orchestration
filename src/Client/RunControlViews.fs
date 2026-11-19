@@ -4,6 +4,7 @@ open System
 open Feliz
 open Shared
 open SAFE
+open Fable.Core
 
 /// Formats wall-clock durations without implying second-level estimate precision.
 let private duration seconds =
@@ -69,174 +70,195 @@ let private taskSection label tasks showLog =
     if List.isEmpty tasks then Html.none
     else Html.section [prop.className "run-control-group";prop.children [Html.h3 ($"{label} · {List.length tasks}");taskTable tasks showLog]]
 
-/// Renders a node accordion with utilization, completion and wall-clock estimates.
-let private nodeView (node:RunControlNode) showLog =
-    let total=node.Tasks.Length
-    let running=node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Running)
-    let current=
-        match running with
-        | [] when total=0 -> "Idle"
-        | [] -> node.EstimateNote
-        | [task] -> "PHSP "+task.PhaseSpaceIndex+" · "+(task.SlurmTaskId |> Option.defaultValue task.RunId)
-        | tasks -> ($"{tasks.Length} tasks running · ")+(tasks |> List.choose _.SlurmTaskId |> String.concat ", ")
-    let telemetry=node.TelemetryError |> Option.defaultWith(fun () ->
-        let memory=match node.MemoryUsedGb,node.MemoryTotalGb with Some used,Some all -> sprintf "RAM %.1f / %.1f GiB. " used all | _ -> ""
-        memory+(node.TelemetryAt |> Option.map(fun at -> "Sampled "+localTime at) |> Option.defaultValue "CPU needs two samples."))
-    /// Renders a truthful count segment rather than guessing fractional TOPAS progress.
-    let segment (className:string) count =
-        Html.span [prop.className className;prop.style [style.width (length.percent (if total=0 then 0. else 100.*float count/float total))]]
-    Html.details [prop.key node.NodeName;prop.className "run-control-node";prop.children [
-        Html.summary [prop.className "run-control-row";prop.children [
-            Html.div [prop.className "run-control-name";prop.children [Html.strong node.NodeName;Html.span current]]
-            Html.span [prop.title telemetry;prop.text(percent node.CpuPercent)]
-            Html.span [prop.title telemetry;prop.text(percent node.MemoryPercent)]
-            Html.div [prop.children [
-                Html.div [prop.className "run-control-progress";prop.custom("role","progressbar");prop.custom("aria-label",node.NodeName+" completed tasks");prop.custom("aria-valuemin",0);prop.custom("aria-valuemax",max 1 total);prop.custom("aria-valuenow",node.CompletedCount);
-                          prop.children [segment "completed" node.CompletedCount;segment "failed" node.FailedCount;segment "running" node.RunningCount]]
-                Html.div [prop.className "run-control-caption";prop.text(($"{node.CompletedCount} / {total} completed")+(if node.FailedCount>0 then $" · {node.FailedCount} failed" else ""))]]]
-            Html.span (duration node.ElapsedSeconds)
-            Html.div [prop.title node.EstimateNote;prop.children [Html.strong (duration node.RemainingSeconds);Html.div [prop.className "run-control-caption";prop.text node.EstimateNote]]]]]
-        Html.div [prop.className "run-control-body";prop.children [
-            if node.TelemetryError.IsSome then Html.p [prop.className "text-xs opacity-60";prop.text("CPU / RAM: "+telemetry)]
-            taskSection "Running" running showLog
-            taskSection "Waiting · planned order" (node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Pending || task.State=RunTaskState.NotSubmitted)) showLog
-            taskSection "Needs attention" (node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Failed || task.State=RunTaskState.Unknown || task.State=RunTaskState.Suspended)) showLog
-            let finished=node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Completed)
-            if not finished.IsEmpty then Html.details [prop.children [Html.summary [prop.className "cursor-pointer py-3 font-semibold";prop.text($"Completed · {finished.Length}")];taskTable finished showLog]]
-            if total=0 then Html.p "No tasks assigned to this node in this batch."
-            Html.p [prop.className "text-xs opacity-60 mt-3";prop.text "Slurm may start array tasks in any order. Remaining time assumes the current concurrency continues."]]]]]
+/// Opens the native dialog once, preserving keyboard focus while its text refreshes.
+[<Emit("if ($0 && !$0.open) $0.showModal()")>]
+let private openDialog (element:obj) : unit = jsNative
 
-/// Renders the read-only monitor with polling isolated from batch changes and unmounts.
+/// Closes the native dialog and restores focus to the control that opened it.
+[<Emit("if ($0 && $0.open) $0.close()")>]
+let private closeDialog (element:obj) : unit = jsNative
+
+/// Renders completed, running and failed task counts as a compact progress bar.
+let private progress (node:RunControlNode) =
+    let total=node.Tasks.Length
+    /// Renders one count segment without estimating progress inside an individual task.
+    let segment (name:string) count = Html.span [prop.className name;prop.style [style.width(length.percent(if total=0 then 0. else 100.*float count/float total))]]
+    Html.div [
+        Html.div [prop.className "run-control-progress";prop.custom("role","progressbar");prop.custom("aria-label","Completed tasks");prop.custom("aria-valuemin",0);prop.custom("aria-valuemax",max 1 total);prop.custom("aria-valuenow",node.CompletedCount);
+                  prop.children [segment "completed" node.CompletedCount;segment "failed" node.FailedCount;segment "running" node.RunningCount]]
+        Html.div [prop.className "run-control-caption";prop.text(sprintf "%d / %d completed%s" node.CompletedCount total (if node.FailedCount=0 then "" else sprintf " · %d failed" node.FailedCount))]
+    ]
+
+/// Reveals individual PHSP tasks only when the user requests the run's task details.
+let private taskDetails seed (node:RunControlNode) showLog =
+    Html.details [prop.className "run-control-task-details";prop.children [
+        Html.summary [prop.className "analysis-button";prop.text(sprintf "Task details · %d task%s" node.Tasks.Length (if node.Tasks.Length=1 then "" else "s"))]
+        Html.div [prop.className "run-control-task-body";prop.children [
+            taskSection "Running" (node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Running)) (showLog seed)
+            taskSection "Waiting" (node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Pending || task.State=RunTaskState.NotSubmitted)) (showLog seed)
+            taskSection "Needs attention" (node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Failed || task.State=RunTaskState.Unknown || task.State=RunTaskState.Suspended)) (showLog seed)
+            taskSection "Completed" (node.Tasks |> List.filter(fun task -> task.State=RunTaskState.Completed)) (showLog seed)
+        ]]
+    ]]
+
+/// Renders a run-level row inside a live node without exposing PHSP identifiers immediately.
+let private runRow (activity:RunControlActivity) (snapshots:RunControlSnapshot list) showLog =
+    let node=snapshots |> List.tryFind(fun snapshot -> snapshot.SeedBase=activity.SeedBase) |> Option.bind(fun snapshot -> snapshot.Nodes |> List.tryFind(fun node -> node.NodeName=activity.NodeName))
+    Html.section [prop.key activity.SeedBase;prop.className "run-control-run";prop.children [
+        Html.div [prop.className "run-control-run-heading";prop.children [
+            Html.strong ("Run "+activity.SeedBase)
+            Html.span (stateLabel activity.State)
+            Html.span [prop.className "text-xs opacity-60";prop.text("Slurm "+String.concat ", " activity.ArrayIds)]
+        ]]
+        match node with
+        | None -> Html.p [prop.className "text-sm opacity-60";prop.text "Run details unavailable."]
+        | Some value ->
+            progress value
+            Html.p [prop.className "text-xs opacity-60 my-2";prop.text("Elapsed "+duration value.ElapsedSeconds+" · Remaining "+duration value.RemainingSeconds)]
+            taskDetails activity.SeedBase value showLog
+    ]]
+
+/// Renders either live activity or the selected historical run on a configured node.
+let private nodeView (reading:RunControlNode) (activities:RunControlActivity list) (snapshots:RunControlSnapshot list) selected queueUnavailable showLog =
+    let runs=activities |> List.filter(fun activity -> activity.NodeName=reading.NodeName) |> List.sortBy(fun activity -> (if activity.State=RunTaskState.Running then 0 else 1),activity.ArrayIds |> List.tryHead |> Option.map(fun id -> id.Length,id) |> Option.defaultValue(0,""))
+    let historical=snapshots |> List.tryFind(fun snapshot -> snapshot.SeedBase=selected) |> Option.bind(fun snapshot -> snapshot.Nodes |> List.tryFind(fun node -> node.NodeName=reading.NodeName))
+    let current=if selected<>"" then historical else runs |> List.tryHead |> Option.bind(fun activity -> snapshots |> List.tryFind(fun snapshot -> snapshot.SeedBase=activity.SeedBase) |> Option.bind(fun snapshot -> snapshot.Nodes |> List.tryFind(fun node -> node.NodeName=reading.NodeName)))
+    let caption=
+        if selected<>"" then "Run "+selected+" · selected run"
+        else match runs with
+             | [] -> if queueUnavailable then "State unavailable" else "Idle"
+             | first::_ -> "Run "+first.SeedBase+" · "+stateLabel first.State+" · Slurm "+String.concat ", " first.ArrayIds+(if runs.Length>1 then sprintf " · %d more run(s)" (runs.Length-1) else "")
+    let telemetry=reading.TelemetryError |> Option.defaultValue (match reading.MemoryUsedGb,reading.MemoryTotalGb with Some used,Some total -> sprintf "RAM %.1f / %.1f GiB" used total | _ -> "CPU needs two samples.")
+    Html.details [prop.key (selected+"|"+reading.NodeName);prop.className "run-control-node";prop.children [
+        Html.summary [prop.className "run-control-row";prop.children [
+            Html.div [prop.className "run-control-name";prop.children [Html.strong reading.NodeName;Html.span caption]]
+            Html.span [prop.title telemetry;prop.text(percent reading.CpuPercent)]
+            Html.span [prop.title telemetry;prop.text(percent reading.MemoryPercent)]
+            match current with
+            | None -> Html.span "—";Html.span "—";Html.span "—"
+            | Some value -> progress value;Html.span(duration value.ElapsedSeconds);Html.span [prop.title value.EstimateNote;prop.text(duration value.RemainingSeconds)]
+        ]]
+        Html.div [prop.className "run-control-body";prop.children [
+            if selected<>"" then
+                match historical with Some value -> taskDetails selected value showLog | None -> Html.p "No tasks for this node."
+            elif runs.IsEmpty then Html.p [prop.className "text-sm opacity-60";prop.text "No active or queued runs. Select a run above to inspect history."]
+            else
+                for activity in runs do runRow activity snapshots showLog
+                Html.p [prop.className "text-xs opacity-60 mt-3";prop.text "Queue order follows submitted array IDs. Slurm may start work in a different order."]
+            if reading.TelemetryError.IsSome then Html.p [prop.className "text-xs opacity-60 mt-3";prop.text("CPU / RAM: "+telemetry)]
+        ]]
+    ]]
+
+/// Renders the live node overview with optional run history and a native modal log viewer.
 [<ReactComponent>]
 let View () =
     let api=React.useMemo((fun () -> Api.makeProxy<ITopasApi>()),[||])
     let batches,setBatches=React.useState<RunBatchSummary list>([])
-    let selected,setSelected=React.useStateWithUpdater("")
+    let selected,setSelected=React.useState("")
+    let overview,setOverview=React.useState<RunControlOverview option>(None)
     let snapshot,setSnapshot=React.useState<RunControlSnapshot option>(None)
-    let batchError,setBatchError=React.useState("")
     let error,setError=React.useState("")
     let busy,setBusy=React.useState(false)
     let revision,setRevision=React.useStateWithUpdater(0)
     let log,setLog=React.useState<(string * string) option>(None)
-    let logRequest=React.useRef(0)
+    let requestId=React.useRef(0)
     React.useEffect((fun () ->
         let mutable disposed=false
-        let mutable inFlight=false
-        /// Refreshes batch choices without resetting the selected batch on each poll.
+        /// Refreshes history choices without changing the selected view.
         let refresh () =
-            if not disposed && not inFlight then
-                inFlight <- true
-                async {
-                    try
-                        let! result=api.getRunControlBatches()
-                        if not disposed then
-                            match result with
-                            | Error message -> setBatchError message
-                            | Ok values ->
-                                setBatches values
-                                setBatchError ""
-                                setSelected(fun current -> if current<>"" then current else values |> List.tryFind(fun batch -> batch.SlurmJobId.IsSome) |> Option.orElse(List.tryHead values) |> Option.map _.SeedBase |> Option.defaultValue "")
-                    with ex -> if not disposed then setBatchError ex.Message
-                    inFlight <- false
-                } |> Async.StartImmediate
+          async {
+            try
+                let! result=api.getRunControlBatches()
+                if not disposed then match result with Ok values -> setBatches values | Error message -> setError message
+            with ex -> if not disposed then setError ex.Message
+          } |> Async.StartImmediate
         refresh()
         let timer=Browser.Dom.window.setInterval(refresh,60000)
         {new IDisposable with member _.Dispose()=disposed <- true;Browser.Dom.window.clearInterval timer}),[||])
     React.useEffect((fun () ->
         let mutable disposed=false
         let mutable inFlight=false
-        /// Polls a single batch and retains its last successful snapshot after transient failures.
+        /// Polls the selected view and ignores results from a previous selection or unmounted page.
         let refresh () =
-            if selected<>"" && not disposed && not inFlight then
+            if not disposed && not inFlight then
                 inFlight <- true
                 setBusy true
                 async {
                     try
-                        let! result=api.getRunControl selected
-                        if not disposed then
-                            match result with Ok value -> setSnapshot(Some value);setError "" | Error message -> setError message
+                        if selected="" then
+                            let! result=api.getRunControlOverview()
+                            if not disposed then match result with Ok value -> setOverview(Some value);setError "" | Error message -> setError message
+                        else
+                            let! result=api.getRunControl selected
+                            if not disposed then match result with Ok value -> setSnapshot(Some value);setError "" | Error message -> setError message
                     with ex -> if not disposed then setError ex.Message
                     inFlight <- false
                     if not disposed then setBusy false
-                } |> Async.StartImmediate
+                  } |> Async.StartImmediate
         refresh()
         let timer=Browser.Dom.window.setInterval(refresh,10000)
         {new IDisposable with member _.Dispose()=disposed <- true;Browser.Dom.window.clearInterval timer}),[|box selected;box revision|])
-    React.useEffect((fun () -> logRequest.current <- logRequest.current+1;setLog None),[|box selected|])
-    React.useEffectOnce(fun () -> {new IDisposable with member _.Dispose()=logRequest.current <- logRequest.current+1})
-    /// Loads a bounded log tail while ignoring responses for closed or superseded panels.
-    let showLog (task:RunControlTask) =
-        logRequest.current <- logRequest.current+1
-        let request=logRequest.current
+    /// Closes the log, invalidates pending responses and restores the opener's keyboard focus.
+    let dismissLog () =
+        requestId.current <- requestId.current+1
+        closeDialog(Browser.Dom.document.getElementById "run-control-log-dialog")
+        setLog None
+    React.useEffect((fun () -> if log.IsSome then openDialog(Browser.Dom.document.getElementById "run-control-log-dialog")),[|box log|])
+    React.useEffect((fun () -> dismissLog()),[|box selected|])
+    React.useEffectOnce(fun () -> {new IDisposable with member _.Dispose()=requestId.current <- requestId.current+1})
+    /// Opens the log immediately in a modal and prevents late responses from reopening a closed log.
+    let showLog seed (task:RunControlTask) =
+        requestId.current <- requestId.current+1
+        let request=requestId.current
         setLog(Some(task.RunId,"Loading…"))
         async {
             try
-                let! result=api.getRunControlLog {SeedBase=selected;RunId=task.RunId}
-                if request=logRequest.current then setLog(Some(task.RunId,match result with Ok text -> text | Error message -> message))
-            with ex -> if request=logRequest.current then setLog(Some(task.RunId,ex.Message))
+                let! result=api.getRunControlLog {SeedBase=seed;RunId=task.RunId}
+                if request=requestId.current then setLog(Some(task.RunId,match result with Ok text -> text | Error message -> message))
+            with ex -> if request=requestId.current then setLog(Some(task.RunId,ex.Message))
         } |> Async.StartImmediate
-    let active=snapshot |> Option.filter(fun value -> value.SeedBase=selected)
-    Html.section [
-        prop.className "run-control"
-        prop.children [
-            Html.div [
-                prop.className "run-control-toolbar"
+    let historical=snapshot |> Option.filter(fun value -> value.SeedBase=selected)
+    let nodes,runs,activities,updated,warnings=
+        if selected="" then
+            match overview with Some value -> value.Nodes,value.Runs,value.Activities,value.CapturedAt,value.Warnings | None -> [],[],[],"",[]
+        else
+            match historical with Some value -> (value.Nodes |> List.filter(fun node -> not node.Tasks.IsEmpty)),[value],[],value.CapturedAt,value.Warnings | None -> [],[],[],"",[]
+    Html.section [prop.className "run-control";prop.children [
+        Html.div [prop.className "run-control-toolbar";prop.children [
+            Html.div [Html.h2 [prop.className "text-lg font-semibold";prop.text "Run Control"];Html.p [prop.className "text-sm opacity-60";prop.text "Refreshes every 10 seconds"]]
+            Html.label [prop.className "analysis-field";prop.children [
+                Html.span "View"
+                Html.select [prop.className "select select-bordered select-sm";prop.custom("aria-label","Run Control view");prop.value selected;prop.onChange setSelected
+                             prop.children [Html.option [prop.value "";prop.text "Live nodes"];for batch in batches do Html.option [prop.value batch.SeedBase;prop.text("Run "+batch.SeedBase)]]]
+            ]]
+            button (if busy then "Refreshing…" else "Refresh") busy (fun () -> setRevision((+) 1))
+        ]]
+        Html.div [prop.className "run-control-totals";prop.children [
+            Html.strong (if selected="" then "Live node activity" else "Viewing run "+selected)
+            if selected<>"" then Html.span [prop.className "text-xs opacity-60";prop.text "Run progress; CPU/RAM show current node usage."]
+            if updated<>"" then Html.span [prop.className "text-xs opacity-60";prop.text("Updated "+localTime updated)]
+        ]]
+        if error<>"" then Html.p [prop.className "run-control-warning";prop.text("Refresh failed: "+error+". Last successful data remains visible.")]
+        for warning in warnings do Html.p [prop.className "run-control-warning";prop.text warning]
+        if updated="" then Html.p [prop.className "p-8 opacity-60";prop.text "Loading nodes…"]
+        else Html.div [prop.className "run-control-scroll";prop.children [Html.div [prop.className "run-control-grid";prop.children [
+            Html.div [prop.className "run-control-row run-control-head";prop.children [for label in ["Node / run";"CPU";"RAM";"Run progress";"Elapsed";"Remaining"] -> Html.span label]]
+            for node in nodes do nodeView node activities runs selected (warnings |> List.exists(fun warning -> warning.StartsWith("Live queue unavailable:"))) showLog
+        ]]]]
+        match log with
+        | None -> ()
+        | Some(title,text) ->
+            Html.dialog [
+                prop.id "run-control-log-dialog"
+                prop.className "run-control-log-dialog"
+                prop.custom("aria-labelledby","run-control-log-title")
+                prop.custom("onCancel",fun (event:Browser.Types.Event) -> event.preventDefault();dismissLog())
                 prop.children [
-                    Html.div [Html.h2 [prop.className "text-lg font-semibold";prop.text "Run Control"];Html.p [prop.className "text-sm opacity-60";prop.text "Live Slurm tasks · refreshes every 10 seconds"]]
-                    Html.label [
-                        prop.className "analysis-field"
-                        prop.children [
-                            Html.span "Batch"
-                            Html.select [
-                                prop.className "select select-bordered select-sm"
-                                prop.custom("aria-label","Run Control batch")
-                                prop.value selected
-                                prop.onChange(fun (value:string) -> setSelected(fun _ -> value))
-                                prop.children [for batch in batches -> Html.option [prop.value batch.SeedBase;prop.text($"{batch.SeedBase} · {batch.RunStatus}")]]
-                            ]
-                        ]
-                    ]
-                    button (if busy then "Refreshing…" else "Refresh") (busy || selected="") (fun () -> setRevision((+) 1))
+                    Html.div [prop.className "run-control-log-heading";prop.children [
+                        Html.div [Html.h3 [prop.id "run-control-log-title";prop.text title];Html.p "Last 64 KiB of TOPAS log"]
+                        Html.button [prop.className "analysis-button";prop.autoFocus true;prop.text "Close log";prop.onClick(fun _ -> dismissLog())]
+                    ]]
+                    Html.pre [prop.tabIndex 0;prop.text text]
                 ]
             ]
-            if batchError<>"" then Html.p [prop.className "alert alert-warning";prop.text batchError]
-            if error<>"" then Html.p [prop.className "alert alert-warning";prop.text("Refresh failed: "+error+". Last successful data remains below.")]
-            match active with
-            | None -> Html.p [prop.className "p-8 opacity-60";prop.text(if selected="" then "No generated batches available." else "Loading node progress…")]
-            | Some value ->
-                Html.div [
-                    prop.className "run-control-totals"
-                    prop.children [
-                        Html.strong ($"{value.CompletedCount} / {value.TotalCount} completed")
-                        Html.span ($"{value.RunningCount} running")
-                        Html.span [prop.className (if value.FailedCount>0 then "text-error" else "");prop.text($"{value.FailedCount} failed")]
-                        Html.span ("Remaining: "+duration value.RemainingSeconds)
-                        if value.RemainingSeconds<>Some 0. then Html.span ("Estimated finish: "+(value.EstimatedFinishAt |> Option.map localTime |> Option.defaultValue "Estimating / unavailable"))
-                        Html.span [prop.className "text-xs opacity-60";prop.text("Updated "+localTime value.CapturedAt)]
-                    ]
-                ]
-                for warning in value.Warnings do Html.p [prop.className "run-control-warning";prop.text warning]
-                Html.div [
-                    prop.className "run-control-scroll"
-                    prop.children [
-                        Html.div [
-                            prop.className "run-control-grid"
-                            prop.children [
-                                Html.div [prop.className "run-control-row run-control-head";prop.children [for label in ["Node / current task";"CPU";"RAM";"Task progress";"Elapsed";"Remaining (estimate)"] -> Html.span label]]
-                                for node in value.Nodes do nodeView node showLog
-                            ]
-                        ]
-                    ]
-                ]
-            match log with
-            | None -> ()
-            | Some(runId,text) ->
-                Html.section [
-                    prop.className "run-control-log"
-                    prop.children [
-                        Html.div [prop.className "flex items-center justify-between gap-3";prop.children [Html.h3 (runId+" · last 64 KiB of log");button "Close log" false (fun () -> logRequest.current <- logRequest.current+1;setLog None)]]
-                        Html.pre [prop.text text]
-                    ]
-                ]
-        ]
-    ]
+    ]]

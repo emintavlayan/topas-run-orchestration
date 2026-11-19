@@ -2,7 +2,7 @@
 
 [README](../README.md) · [All documentation](index.md)
 
-Use the four tabs in order: **Generate → Run → Collect → Analyse**. For an already collected batch, start at Analyse.
+Use **Generate → Run → Collect → Analyse** for simulations, with **Run Control** for monitoring. Use **Import → Analyse** for measurements or to register historical collections. [Import guide](import-guide.md)
 
 ## Before you start
 
@@ -62,7 +62,7 @@ Recollection reads the same raw outputs and creates another timestamp folder. Pr
 
 ## 4. Analyse and export
 
-1. Open **Analyse** and refresh the available outputs.
+1. Open **Analyse** and refresh the saved dataset list. If an older collection is missing, register it through **Import → Existing simulation collections**.
 2. Select run IDs in the left sidebar. Expand a run to choose a collection folder; the latest is the default.
 3. Geometry is used automatically from the batch's archived inputs; its source is available in Settings.
 4. If geometry is unavailable, inspect the reason under **Settings → Geometry** and save a manual override if needed.
